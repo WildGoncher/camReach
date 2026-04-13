@@ -1,0 +1,16 @@
+# Секреты
+secret.key
+cameras.enc
+.env
+
+# Результаты и логи
+results.json
+*.log
+
+# Python кэш
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/

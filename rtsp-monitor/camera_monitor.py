@@ -1,12 +1,23 @@
 #!/usr/bin/env python3
+"""
+Безопасный RTSP Monitor
+- Читает зашифрованный cameras.enc
+- Проверяет камеры через ffprobe
+- Выводит результаты БЕЗ паролей в логах/терминале
+"""
 import asyncio
-import subprocess
 import json
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
+from cryptography.fernet import Fernet
 
-# Настройка логирования
+# === НАСТРОЙКИ ===
+KEY_FILE = "secret.key"
+CAMERAS_ENC = "cameras.enc"
+RESULTS_FILE = "results.json"
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -17,116 +28,143 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+def load_cameras_encrypted() -> list:
+    """Расшифровывает и возвращает список камер из cameras.enc"""
+    key_path = Path(KEY_FILE)
+    enc_path = Path(CAMERAS_ENC)
+    
+    if not key_path.exists():
+        raise RuntimeError(f"❌ Ключ не найден: {KEY_FILE}\nЗапустите сначала excelToJSON.py")
+    if not enc_path.exists():
+        raise RuntimeError(f"❌ Файл камер не найден: {CAMERAS_ENC}\nЗапустите сначала excelToJSON.py")
+    
+    cipher = Fernet(key_path.read_bytes())
+    decrypted = cipher.decrypt(enc_path.read_bytes())
+    return json.loads(decrypted.decode())
+
+
+def strip_auth_for_display(url: str) -> str:
+    """Заменяет логин:пароль на *** для безопасного вывода"""
+    return re.sub(r'://[^@/]+@', '://***@', url)
+
+
 async def check_camera(url: str, timeout: int = 5) -> dict:
+    """Проверка одной камеры через ffprobe"""
     cmd = [
-        'ffprobe',
-        '-v', 'error',
+        'ffprobe', '-v', 'error',
         '-show_entries', 'stream=codec_name',
         '-of', 'json',
-        '-timeout', str(timeout * 1000000),
+        '-timeout', str(timeout * 1_000_000),
         '-rtsp_transport', 'tcp',
         url
     ]
-    
     try:
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+        proc = await asyncio.create_subprocess_exec(
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
-        stdout, stderr = await asyncio.wait_for(
-            process.communicate(),
-            timeout=timeout + 1
-        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout + 1)
         
-        if process.returncode == 0 and stdout:
+        if proc.returncode == 0 and stdout:
             data = json.loads(stdout.decode())
             if data.get('streams'):
-                return {'status': True, 'codec': data['streams'][0].get('codec_name', 'unknown')}
+                return {'status': True, 'detail': data['streams'][0].get('codec_name', 'ok')}
         
         error = stderr.decode('utf-8', errors='ignore').strip()
-        return {'status': False, 'error': error[:200] if error else 'Unknown'}
+        return {'status': False, 'detail': error[:150] if error else 'Unknown'}
         
     except asyncio.TimeoutError:
-        if 'process' in locals() and process.returncode is None:
-            process.kill()
-            await process.wait()
-        return {'status': False, 'error': 'Timeout'}
+        return {'status': False, 'detail': 'Timeout'}
     except FileNotFoundError:
-        return {'status': False, 'error': 'ffprobe not found'}
+        return {'status': False, 'detail': 'ffprobe not found. Install ffmpeg.'}
     except Exception as e:
-        return {'status': False, 'error': f'{type(e).__name__}: {str(e)[:100]}'}
+        return {'status': False, 'detail': f'{type(e).__name__}: {str(e)[:100]}'}
 
-def load_cameras(path='cameras.json') -> list:
-    with open(path, 'r', encoding='utf-8') as f:
-        return json.load(f)
 
-def save_results(results: list, path='results.json'):
-    with open(path, 'w', encoding='utf-8') as f:
-        json.dump({
-            'checked_at': datetime.now().isoformat(),
-            'results': results
-        }, f, indent=2, ensure_ascii=False)
-
-async def check_all_cameras(cameras: list, max_concurrent: int = 30, timeout: int = 5) -> list:
+async def check_all_cameras(cameras: list, max_concurrent: int = 20, timeout: int = 5) -> list:
+    """Параллельная проверка с ограничением одновременных запросов"""
+    active = [c for c in cameras if c.get('enabled', True)]
     semaphore = asyncio.Semaphore(max_concurrent)
     
-    async def check_with_sem(cam):
+    async def check_with_limit(cam):
         async with semaphore:
             result = await check_camera(cam['url'], timeout)
-            return {'id': cam['id'], 'name': cam['name'], 'url': cam['url'], **result}
+            return {
+                'id': cam['id'],
+                'name': cam['name'],
+                'url_display': strip_auth_for_display(cam['url']),
+                **result
+            }
     
-    active = [c for c in cameras if c.get('enabled')]
-    logger.info(f"Запуск проверки {len(active)} камер (параллельно: {max_concurrent})")
-    
-    tasks = [check_with_sem(c) for c in active]
+    logger.info(f"🔍 Проверка {len(active)} камер (параллельно: {max_concurrent})")
+    tasks = [check_with_limit(c) for c in active]
     return await asyncio.gather(*tasks)
 
-async def monitoring_loop(interval: int = 300, max_concurrent: int = 30):
-    """Бесконечный цикл проверки"""
-    while True:
-        try:
-            start = datetime.now()
-            cameras = load_cameras()
-            results = await check_all_cameras(cameras, max_concurrent)
-            
-            # Сохраняем результаты
-            save_results(results)
-            
-            # Статистика
-            online = sum(1 for r in results if r['status'])
-            elapsed = (datetime.now() - start).total_seconds()
-            
-            logger.info(f"✅ Проверка завершена: {online}/{len(results)} онлайн, время: {elapsed:.1f}с")
-            
-            # Вывод изменений (только оффлайн-камеры для наглядности)
-            for r in results:
-                if not r['status']:
-                    logger.warning(f"🔴 {r['name']}: {r.get('error', 'No info')}")
-            
-            await asyncio.sleep(interval)
-            
-        except Exception as e:
-            logger.error(f"❌ Ошибка в цикле: {e}")
-            await asyncio.sleep(60)
+
+def save_results(results: list):
+    """Сохраняет результаты БЕЗ конфиденциальных данных"""
+    output = {
+        'checked_at': datetime.now().isoformat(),
+        'summary': {
+            'total': len(results),
+            'online': sum(1 for r in results if r['status']),
+            'offline': sum(1 for r in results if not r['status'])
+        },
+        'results': [
+            {k: v for k, v in r.items() if k != 'url'}
+            for r in results
+        ]
+    }
+    Path(RESULTS_FILE).write_text(
+        json.dumps(output, indent=2, ensure_ascii=False),
+        encoding='utf-8'
+    )
+
+
+def print_summary(results: list):
+    """Вывод в терминале с итоговой строкой"""
+    print(f"\n[{datetime.now().strftime('%H:%M:%S')}] Результаты:")
+    for i, r in enumerate(results, 1):
+        icon = "🟢" if r['status'] else "🔴"
+        print(f"{icon} {i}. {r['name']}: {r['detail']}")
+    
+    total = len(results)
+    online = sum(1 for r in results if r['status'])
+    offline = total - online
+    off_str = f"\033[91m{offline}\033[0m" if offline else str(offline)
+    print(f"Количество камер: {total}, в сети: {online}, отключены: {off_str}")
+
 
 async def main():
     import sys
     mode = sys.argv[1] if len(sys.argv) > 1 else 'test'
     
+    cameras = load_cameras_encrypted()
+    
     if mode == 'test':
-        # Однократная проверка
-        cameras = load_cameras()
         results = await check_all_cameras(cameras, max_concurrent=10)
-        print(f"\n[{datetime.now().strftime('%H:%M:%S')}] Результаты:")
-        for r in results:
-            icon = "🟢" if r['status'] else "🔴"
-            info = r.get('codec') or r.get('error', '')
-            print(f"{icon} {r['name']}: {info}")
-            
+        save_results(results)
+        print_summary(results)
+        
     elif mode == 'monitor':
-        # Непрерывный мониторинг
-        await monitoring_loop(interval=300, max_concurrent=30)
+        while True:
+            try:
+                start = datetime.now()
+                results = await check_all_cameras(cameras)
+                save_results(results)
+                online = sum(1 for r in results if r['status'])
+                elapsed = (datetime.now() - start).total_seconds()
+                logger.info(f"✅ Проверка: {online}/{len(results)} онлайн, {elapsed:.1f}с")
+                for r in results:
+                    if not r['status']:
+                        logger.warning(f"🔴 {r['name']}: {r['detail']}")
+                await asyncio.sleep(300)
+            except Exception as e:
+                logger.error(f"❌ Ошибка цикла: {e}")
+                await asyncio.sleep(60)
+    else:
+        print("Использование: python camera_monitor.py [test|monitor]")
+
 
 if __name__ == "__main__":
     asyncio.run(main())
