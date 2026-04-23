@@ -1,0 +1,849 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DOMARGO - Camera Monitor</title>
+    <style>
+      /* =============================================================================
+         CSS CUSTOM PROPERTIES (DESIGN TOKENS)
+         Centralized configuration for easy theming and maintenance
+         ============================================================================= */
+      :root {
+        /* ── Colors ───────────────────────────────────────────────────── */
+        --color-bg-body: #0a0a0a;
+        --color-bg-header: #111111;
+        --color-bg-card: linear-gradient(145deg, #1a1a1a, #0f0f0f);
+        --color-bg-card-hover: linear-gradient(145deg, #202020, #151515);
+        --color-bg-object: linear-gradient(90deg, #1a1a1a, #0f0f0f);
+
+        --color-text-primary: #ffffff;
+        --color-text-secondary: #e0e0e0;
+        --color-text-muted: #888888;
+        --color-text-dim: #666666;
+
+        --color-border-default: #2a2a2a;
+        --color-border-header: #333333;
+        --color-border-accent: #444444;
+
+        --color-status-online: #2ecc71;
+        --color-status-online-bg: rgba(46, 204, 113, 0.15);
+        --color-status-online-border: rgba(46, 204, 113, 0.3);
+        --color-status-online-glow: rgba(46, 204, 113, 0.5);
+
+        --color-status-offline: #e74c3c;
+        --color-status-offline-bg: rgba(231, 76, 60, 0.15);
+        --color-status-offline-border: rgba(231, 76, 60, 0.3);
+        --color-status-offline-glow: rgba(231, 76, 60, 0.5);
+
+        /* ── Typography ────────────────────────────────────────────────── */
+        --font-family-base: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        --font-weight-light: 300;
+        --font-weight-regular: 400;
+        --font-weight-medium: 500;
+
+        /* Fluid typography using clamp(min, preferred, max) */
+        --text-xs: clamp(0.7em, 2.5vw, 0.8em);
+        --text-sm: clamp(0.8em, 3vw, 0.9em);
+        --text-base: clamp(0.9em, 3.5vw, 1em);
+        --text-lg: clamp(1em, 4vw, 1.2em);
+        --text-xl: clamp(1.2em, 5vw, 1.4em);
+        --text-2xl: clamp(1.4em, 6vw, 1.8em);
+
+        /* ── Spacing ───────────────────────────────────────────────────── */
+        --space-xxs: 4px;
+        --space-xs: clamp(8px, 2vw, 10px);
+        --space-sm: clamp(10px, 2.5vw, 12px);
+        --space-md: clamp(15px, 3vw, 20px);
+        --space-lg: clamp(20px, 4vw, 25px);
+        --space-xl: clamp(25px, 5vw, 30px);
+        --space-2xl: clamp(30px, 6vw, 40px);
+
+        /* ── Layout ────────────────────────────────────────────────────── */
+        --layout-max-width: 1400px;
+        --layout-padding-x: clamp(10px, 3vw, 20px);
+        --header-height: auto;
+        --card-min-height: clamp(110px, 20vw, 140px);
+        --card-border-width: 4px;
+        --card-border-radius: 4px;
+
+        /* ── Effects ───────────────────────────────────────────────────── */
+        --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.5);
+        --shadow-card-hover: 0 6px 25px rgba(0, 0, 0, 0.7);
+        --transition-fast: 0.2s ease;
+        --transition-base: 0.3s ease;
+        --transition-slow: 0.5s ease;
+      }
+
+      /* =============================================================================
+         BASE RESET & TYPOGRAPHY
+         ============================================================================= */
+      *,
+      *::before,
+      *::after {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        font-family: var(--font-family-base);
+        background-color: var(--color-bg-body);
+        color: var(--color-text-secondary);
+        line-height: 1.6;
+        font-weight: var(--font-weight-light);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      /* =============================================================================
+         HEADER STYLES
+         ============================================================================= */
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-md);
+        background-color: var(--color-bg-header);
+        padding: var(--space-md);
+        border-bottom: 1px solid var(--color-border-header);
+        margin-bottom: var(--space-2xl);
+        position: sticky;
+        top: 0;
+        z-index: 100;
+      }
+
+      #header-title {
+        flex-grow: 1;
+        text-align: center;
+      }
+
+      #header-logo,
+      #current-time {
+        flex-shrink: 0;
+      }
+
+      #header-logo {
+        width: clamp(4rem, 12vw, 8rem);
+        height: auto;
+        object-fit: contain;
+      }
+
+      #current-time {
+        font-size: var(--text-base);
+        color: var(--color-text-muted);
+        font-weight: var(--font-weight-light);
+        letter-spacing: 0.5px;
+      }
+
+      h1 {
+        text-align: center;
+        font-weight: var(--font-weight-light);
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        font-size: var(--text-2xl);
+        color: var(--color-text-primary);
+      }
+
+      /* =============================================================================
+         MAIN CONTAINER & OBJECT SECTIONS
+         ============================================================================= */
+      .objects-container {
+        max-width: var(--layout-max-width);
+        margin: 0 auto;
+        padding: 0 var(--layout-padding-x) var(--space-2xl);
+      }
+
+      .object-header {
+        background: var(--color-bg-object);
+        padding: var(--space-sm) var(--space-lg);
+        margin: var(--space-xl) 0 var(--space-md);
+        border-left: 3px solid var(--color-border-accent);
+        border-radius: var(--card-border-radius);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: var(--space-xs);
+      }
+
+      .object-name {
+        font-size: var(--text-xl);
+        font-weight: var(--font-weight-regular);
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        color: var(--color-text-primary);
+        min-width: 200px;
+      }
+
+      .object-stats {
+        font-size: var(--text-sm);
+        color: var(--color-text-dim);
+        font-weight: var(--font-weight-light);
+        display: flex;
+        gap: var(--space-md);
+        flex-wrap: wrap;
+      }
+
+      .object-stats span {
+        white-space: nowrap;
+      }
+
+      .stat-online {
+        color: var(--color-status-online);
+      }
+
+      .stat-offline {
+        color: var(--color-status-offline);
+      }
+
+      /* =============================================================================
+         CAMERA GRID & CARDS
+         ============================================================================= */
+      .cameras-grid {
+        display: grid;
+        grid-template-columns: repeat(
+          auto-fill,
+          minmax(clamp(260px, 80vw, 300px), 1fr)
+        );
+        gap: var(--space-md);
+      }
+
+      .camera-card {
+        background: var(--color-bg-card);
+        border-radius: var(--card-border-radius);
+        padding: var(--space-md);
+        border: 1px solid var(--color-border-default);
+        box-shadow: var(--shadow-card);
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        min-height: var(--card-min-height);
+        transition:
+          transform var(--transition-base),
+          box-shadow var(--transition-base),
+          border-color var(--transition-base);
+        cursor: pointer;
+      }
+
+      .camera-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-card-hover);
+        border-color: var(--color-border-accent);
+      }
+
+      .camera-card::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: var(--card-border-width);
+        height: 100%;
+        background: var(--color-border-accent);
+        transition:
+          background var(--transition-base),
+          box-shadow var(--transition-base);
+      }
+
+      .status-online::before {
+        background: var(--color-status-online);
+        box-shadow: 0 0 10px var(--color-status-online-glow);
+      }
+
+      .status-offline::before {
+        background: var(--color-status-offline);
+        box-shadow: 0 0 10px var(--color-status-offline-glow);
+      }
+
+      .camera-name {
+        font-size: var(--text-lg);
+        font-weight: var(--font-weight-regular);
+        margin-bottom: var(--space-xs);
+        letter-spacing: 1px;
+        color: var(--color-text-primary);
+        line-height: 1.3;
+      }
+
+      .camera-info {
+        color: var(--color-text-muted);
+        font-size: var(--text-sm);
+        margin-bottom: var(--space-xxs);
+        font-weight: var(--font-weight-light);
+        word-break: break-word;
+      }
+
+      .status-indicator {
+        display: inline-block;
+        padding: var(--space-xxs) var(--space-xs);
+        border-radius: 3px;
+        font-size: var(--text-xs);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-top: auto;
+        font-weight: var(--font-weight-medium);
+        align-self: flex-start;
+      }
+
+      .status-online .status-indicator {
+        background: var(--color-status-online-bg);
+        color: var(--color-status-online);
+        border: 1px solid var(--color-status-online-border);
+      }
+
+      .status-offline .status-indicator {
+        background: var(--color-status-offline-bg);
+        color: var(--color-status-offline);
+        border: 1px solid var(--color-status-offline-border);
+      }
+
+      .loading {
+        text-align: center;
+        font-size: var(--text-lg);
+        color: var(--color-text-dim);
+        padding: var(--space-2xl);
+        font-weight: var(--font-weight-light);
+        letter-spacing: 2px;
+        grid-column: 1 / -1;
+      }
+
+      /* =============================================================================
+         MODAL STYLES (Video Player)
+         ============================================================================= */
+      .modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.9);
+        z-index: 1000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        opacity: 0;
+        visibility: hidden;
+        transition:
+          opacity 0.3s ease,
+          visibility 0.3s ease;
+      }
+
+      .modal.active {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .modal-content {
+        background: #111;
+        border: 1px solid #333;
+        border-radius: 8px;
+        width: 90%;
+        max-width: 1200px;
+        max-height: 90vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+      }
+
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 15px 20px;
+        border-bottom: 1px solid #333;
+        background: #1a1a1a;
+      }
+
+      .modal-header h2 {
+        font-size: 1.2em;
+        font-weight: 400;
+        color: #fff;
+        margin: 0;
+      }
+
+      .btn-close {
+        background: transparent;
+        border: none;
+        color: #888;
+        font-size: 2em;
+        cursor: pointer;
+        line-height: 1;
+        padding: 0 10px;
+        transition: color 0.2s;
+      }
+
+      .btn-close:hover {
+        color: #fff;
+      }
+
+      .video-container {
+        flex-grow: 1;
+        background: #000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        position: relative;
+        min-height: 400px;
+      }
+
+      #stream-image {
+        max-width: 100%;
+        max-height: 80vh;
+        display: none;
+      }
+
+      #stream-image.active {
+        display: block;
+      }
+
+      .loading-indicator {
+        color: #666;
+        font-size: 1.1em;
+        letter-spacing: 1px;
+        position: absolute;
+      }
+
+      /* =============================================================================
+         RESPONSIVE STRUCTURAL BREAKPOINTS
+         ============================================================================= */
+
+      @media (max-width: 1024px) {
+        :root {
+          --layout-padding-x: 15px;
+        }
+        header {
+          padding: var(--space-sm);
+          gap: var(--space-sm);
+        }
+        #header-logo {
+          width: 6rem;
+        }
+        h1 {
+          font-size: var(--text-xl);
+        }
+        .object-header {
+          padding: var(--space-xs) var(--space-md);
+          margin: var(--space-lg) 0 var(--space-sm);
+        }
+        .object-name {
+          font-size: var(--text-lg);
+        }
+        .object-stats {
+          font-size: var(--text-xs);
+          gap: var(--space-sm);
+        }
+        .cameras-grid {
+          gap: var(--space-sm);
+        }
+        .camera-card {
+          padding: var(--space-sm);
+        }
+      }
+
+      @media (max-width: 768px) {
+        header {
+          flex-direction: column;
+          align-items: center;
+          text-align: center;
+          padding: var(--space-sm) var(--space-xs);
+          gap: var(--space-xs);
+        }
+        #header-logo {
+          order: 1;
+        }
+        #header-title {
+          order: 2;
+          width: 100%;
+        }
+        #current-time {
+          order: 3;
+        }
+        .object-header {
+          flex-direction: column;
+          align-items: flex-start;
+          padding: var(--space-sm) var(--space-md);
+          margin: var(--space-md) 0 var(--space-sm);
+          gap: var(--space-xxs);
+        }
+        .object-name {
+          min-width: auto;
+        }
+        .object-stats {
+          width: 100%;
+          justify-content: flex-start;
+          gap: var(--space-xs) var(--space-sm);
+        }
+        .object-stats span {
+          margin: 0;
+        }
+        .cameras-grid {
+          grid-template-columns: 1fr;
+          gap: var(--space-sm);
+        }
+        .loading {
+          padding: var(--space-xl) var(--space-md);
+        }
+      }
+
+      @media (max-width: 480px) {
+        header {
+          padding: var(--space-xs);
+        }
+        #header-logo {
+          width: 4rem;
+        }
+        h1 {
+          font-size: var(--text-lg);
+        }
+        #current-time {
+          font-size: var(--text-xs);
+        }
+        .objects-container {
+          padding: 0 8px 20px;
+        }
+        .object-header {
+          padding: var(--space-xs) var(--space-sm);
+          margin: var(--space-sm) 0 var(--space-xs);
+        }
+        .object-name {
+          font-size: var(--text-base);
+        }
+        .object-stats {
+          font-size: var(--text-xs);
+          gap: var(--space-xxs) var(--space-sm);
+        }
+        .cameras-grid {
+          gap: var(--space-sm);
+        }
+        .camera-card {
+          padding: var(--space-sm);
+          border-radius: 3px;
+          min-height: 110px;
+        }
+        .camera-card::before {
+          width: 3px;
+        }
+        .camera-name {
+          font-size: var(--text-base);
+          margin-bottom: var(--space-xxs);
+        }
+        .camera-info {
+          font-size: var(--text-xs);
+          margin-bottom: 2px;
+        }
+        .status-indicator {
+          font-size: 0.7em;
+          padding: 2px 6px;
+          margin-top: var(--space-xs);
+        }
+      }
+
+      /* =============================================================================
+         ACCESSIBILITY & ENHANCEMENTS
+         ============================================================================= */
+      @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+        body {
+          -webkit-font-smoothing: subpixel-antialiased;
+        }
+        .camera-card {
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          transition: none !important;
+          animation: none !important;
+          scroll-behavior: auto !important;
+        }
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --color-bg-card: linear-gradient(145deg, #151515, #0a0a0a);
+          --shadow-card: 0 2px 15px rgba(0, 0, 0, 0.6);
+        }
+      }
+
+      @media print {
+        body {
+          background: #fff;
+          color: #000;
+          font-size: 12pt;
+        }
+        header,
+        .status-indicator,
+        .modal {
+          display: none !important;
+        }
+        .camera-card {
+          break-inside: avoid;
+          border: 1px solid #000;
+          box-shadow: none;
+          background: #fff;
+        }
+        .camera-card::before {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <img
+        id="header-logo"
+        src="/static/assets/img/logo_white.png"
+        alt="DomArgo logo"
+      />
+      <h1 id="header-title">Мониторинг Камер</h1>
+      <div id="current-time"></div>
+    </header>
+
+    <div id="objects-container" class="objects-container">
+      <div class="loading">LOADING CAMERAS...</div>
+    </div>
+
+    <!-- Video Modal -->
+    <div id="video-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="modal-camera-name">Camera Name</h2>
+          <button id="modal-close" class="btn-close">&times;</button>
+        </div>
+        <div class="video-container">
+          <div id="video-loading" class="loading-indicator">
+            Connecting to stream...
+          </div>
+          <img id="stream-image" src="" alt="Stream" />
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const container = document.getElementById("objects-container");
+      const MONTHS_RU = [
+        "января",
+        "февраля",
+        "марта",
+        "апреля",
+        "мая",
+        "июня",
+        "июля",
+        "августа",
+        "сентября",
+        "октября",
+        "ноября",
+        "декабря",
+      ];
+
+      // =============================================================================
+      // TIME UPDATER
+      // =============================================================================
+      function updateDateTime() {
+        const timeElement = document.getElementById("current-time");
+        if (!timeElement) return;
+        const now = new Date();
+        const day = now.getDate();
+        const month = MONTHS_RU[now.getMonth()];
+        const hours = String(now.getHours()).padStart(2, "0");
+        const minutes = String(now.getMinutes()).padStart(2, "0");
+        timeElement.textContent = `${day} ${month} ${hours}:${minutes}`;
+      }
+      updateDateTime();
+      setInterval(updateDateTime, 60000);
+
+            // =============================================================================
+      // MODAL & STREAMING LOGIC
+      // =============================================================================
+      const modal = document.getElementById("video-modal");
+      const modalImage = document.getElementById("stream-image");
+      const modalName = document.getElementById("modal-camera-name");
+      const modalClose = document.getElementById("modal-close");
+      const loadingIndicator = document.getElementById("video-loading");
+      
+      let snapshotInterval = null;
+      let currentCamId = null;
+      let loadingTimeout = null;
+      const STREAM_TIMEOUT_MS = 12000; // 12 секунд
+
+      function openCameraStream(camId, camName) {
+        // Clear previous interval and timeout
+        if (snapshotInterval) clearInterval(snapshotInterval);
+        if (loadingTimeout) clearTimeout(loadingTimeout);
+        
+        currentCamId = camId;
+        modalName.textContent = camName;
+        modal.classList.add("active");
+        
+        loadingIndicator.style.display = "block";
+        loadingIndicator.textContent = "Загрузка... (10-15 сек)";
+        loadingIndicator.style.color = "#666";
+        modalImage.classList.remove("active");
+        modalImage.src = ""; // Clear previous
+
+        // Set timeout for loading
+        loadingTimeout = setTimeout(() => {
+          if (!modalImage.classList.contains("active")) {
+            // Still not loaded after timeout
+            loadingIndicator.textContent = "Превышено время ожидания. Видео недоступно.";
+            loadingIndicator.style.color = "#e74c3c";
+          }
+        }, STREAM_TIMEOUT_MS);
+        
+        // Load first frame immediately
+        loadSnapshot();
+        
+        // Refresh every 1.5 seconds (smooth enough for monitoring)
+        snapshotInterval = setInterval(loadSnapshot, 1500);
+      }
+
+      function loadSnapshot() {
+        if (!currentCamId) return;
+        // Cache-buster forces fresh request each time
+        modalImage.src = `/api/snapshot/${currentCamId}?t=${Date.now()}`;
+      }
+
+      // Handle image load success
+      modalImage.onload = () => {
+        if (loadingTimeout) clearTimeout(loadingTimeout);
+        loadingIndicator.style.display = "none";
+        modalImage.classList.add("active");
+      };
+
+      // Handle image load error
+      modalImage.onerror = () => {
+        // Don't show error immediately - wait for timeout
+        // The timeout handler will show the error message
+      };
+
+      function closeModal() {
+        modal.classList.remove("active");
+        if (snapshotInterval) {
+          clearInterval(snapshotInterval);
+          snapshotInterval = null;
+        }
+        if (loadingTimeout) {
+          clearTimeout(loadingTimeout);
+          loadingTimeout = null;
+        }
+        currentCamId = null;
+        modalImage.src = "";
+      }
+
+      modalClose.addEventListener("click", closeModal);
+      modal.addEventListener("click", (e) => {
+        if (e.target === modal) closeModal();
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && modal.classList.contains("active")) {
+          closeModal();
+        }
+      });
+      // =============================================================================
+      // CAMERA RENDERING
+      // =============================================================================
+      function renderGroupedCameras(cameras) {
+        // 1. Group cameras by object/site
+        const grouped = cameras.reduce((acc, cam) => {
+          const objectName = cam.object || "Unassigned";
+          if (!acc[objectName]) acc[objectName] = [];
+          acc[objectName].push(cam);
+          return acc;
+        }, {});
+
+        container.innerHTML = "";
+
+        // 2. Render each group
+        Object.keys(grouped).forEach((objectName) => {
+          const objectCameras = grouped[objectName];
+          const onlineCount = objectCameras.filter(
+            (c) => c.status === "online",
+          ).length;
+          const offlineCount = objectCameras.length - onlineCount;
+
+          const objectSection = document.createElement("div");
+          objectSection.className = "object-section";
+          objectSection.innerHTML = `
+            <div class="object-header">
+                <div class="object-name">${objectName}</div>
+                <div class="object-stats">
+                    <span class="stat-online">${onlineCount} РАБОТАЕТ</span>
+                    <span class="stat-offline">${offlineCount} ОТКЛЮЧЕНО</span>
+                    <span>${objectCameras.length} ВСЕГО</span>
+                </div>
+            </div>
+            <div class="cameras-grid"></div>
+          `;
+          container.appendChild(objectSection);
+
+          const grid = objectSection.querySelector(".cameras-grid");
+
+          // 3. Render individual cards
+          objectCameras.forEach((cam) => {
+            const card = document.createElement("div");
+            const statusClass =
+              cam.status === "online" ? "status-online" : "status-offline";
+            const statusText =
+              cam.status === "online" ? "РАБОТАЕТ" : "ОТКЛЮЧЕНА";
+
+            // CRITICAL: Store ID for click handler
+            card.dataset.cameraId = cam.id;
+            card.className = `camera-card ${statusClass}`;
+
+            const locationHtml = cam.location
+              ? `<div class="camera-info" style="color: #666; margin: 8px 0;">${cam.location}</div>`
+              : "";
+
+            card.innerHTML = `
+                <div class="camera-name">${cam.name}</div>
+                ${locationHtml}
+                <div class="camera-info">IP: ${cam.ip}</div>
+                <div class="status-indicator">${statusText}</div>
+            `;
+            grid.appendChild(card);
+          });
+        });
+      }
+
+      // =============================================================================
+      // DATA LOADING & EVENT DELEGATION
+      // =============================================================================
+      async function loadCameras() {
+        try {
+          const response = await fetch("/api/cameras");
+          if (!response.ok) throw new Error("Network response was not ok");
+          const cameras = await response.json();
+          renderGroupedCameras(cameras);
+        } catch (error) {
+          console.error("Error fetching cameras:", error);
+          container.innerHTML =
+            '<div class="loading" style="color:#e74c3c">ERROR LOADING DATA</div>';
+        }
+      }
+
+      // Event delegation for camera clicks (works for dynamically added elements)
+      container.addEventListener("click", (e) => {
+        const card = e.target.closest(".camera-card");
+        if (card) {
+          const camId = card.dataset.cameraId;
+          const camName = card.querySelector(".camera-name").textContent;
+          if (camId) {
+            openCameraStream(camId, camName);
+          }
+        }
+      });
+
+      // Initial load
+      loadCameras();
+      setInterval(loadCameras, 5000);
+    </script>
+  </body>
+</html>

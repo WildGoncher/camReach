@@ -1,46 +1,52 @@
-#!/usr/bin/env python3
 """
-Однократный инструмент: Excel → зашифрованный cameras.enc
-URL в таблице уже содержат авторизацию — не добавляем повторно.
+Конвертер Excel → зашифрованный cameras.enc
+Новая структура: ConstSite, Type, CamLocation
 """
+
 import pandas as pd
 import json
-import re
 import sys
 from pathlib import Path
 from cryptography.fernet import Fernet
 
 # === НАСТРОЙКИ ===
-INPUT_FILE = "../data/dbRaw.xlsx"   # Ваш Excel-файл
-OUTPUT_ENC = "cameras.enc"           # Зашифрованный результат
-KEY_FILE = "secret.key"              # Ключ шифрования
+INPUT_FILE = "../data/dbRaw.xlsx"
+OUTPUT_ENC = "cameras.enc"
+KEY_FILE = "secret.key"
 
-# Номера колонок (0 = первая колонка)
-COL_ID = 0          # ID (не используется, генерируется автоматически)
-COL_NAME = 1        # Название объекта
-COL_TYPE = 2        # Тип (не используется, можно добавить позже)
-COL_URL = 3         # RTSP/HTTP ссылка (УЖЕ содержит логин:пароль)
-COL_LOGIN = 4       # Логин (отдельно, не добавляем в URL)
-COL_PASSWORD = 5    # Пароль (отдельно)
-COL_ENABLED = 6     # Активна? (пустое/0/нет = отключена)
+# Номера колонок (0 = первая)
+COL_ID = 0
+COL_CONST_SITE = 1  # ConstSite - название объекта (для группировки)
+COL_TYPE = 2  # Type - тип камеры
+COL_CAM_LOCATION = 3  # CamLocation - описание расположения
+COL_URL = 4  # Link - RTSP URL
+COL_LOGIN = 5  # login
+COL_PASSWORD = 6  # password
+COL_ENABLED = 7  # enabled (опционально)
 
 
 def load_or_create_key(path: str) -> Fernet:
-    """Загружает или создаёт ключ шифрования"""
     p = Path(path)
     if p.exists():
         return Fernet(p.read_bytes())
     key = Fernet.generate_key()
     p.write_bytes(key)
-    print(f"🔑 Создан новый ключ: {path} — СОХРАНИТЕ ЕГО В БЕЗОПАСНОМ МЕСТЕ!")
+    print(f"🔑 Создан новый ключ: {path} — СОХРАНИТЕ ЕГО!")
     return Fernet(key)
 
 
 def is_enabled(value) -> bool:
-    """Определяет, активна ли камера"""
     if pd.isna(value):
         return True
-    return str(value).strip().lower() not in ["0", "false", "no", "нет", "-", "off", "disabled"]
+    return str(value).strip().lower() not in [
+        "0",
+        "false",
+        "no",
+        "нет",
+        "-",
+        "off",
+        "disabled",
+    ]
 
 
 def main():
@@ -57,30 +63,38 @@ def main():
 
     for idx, row in df.iterrows():
         # Извлекаем данные с проверкой границ
-        name = row.iloc[COL_NAME] if COL_NAME < len(row) else None
+        cam_id = row.iloc[COL_ID] if COL_ID < len(row) else idx + 1
+        const_site = row.iloc[COL_CONST_SITE] if COL_CONST_SITE < len(row) else None
+        cam_type = row.iloc[COL_TYPE] if COL_TYPE < len(row) else ""
+        cam_location = row.iloc[COL_CAM_LOCATION] if COL_CAM_LOCATION < len(row) else ""
         url = row.iloc[COL_URL] if COL_URL < len(row) else None
         login = row.iloc[COL_LOGIN] if COL_LOGIN < len(row) else ""
         password = row.iloc[COL_PASSWORD] if COL_PASSWORD < len(row) else ""
         enabled_val = row.iloc[COL_ENABLED] if COL_ENABLED < len(row) else True
 
         # Пропуск пустых строк
-        if pd.isna(name) or pd.isna(url):
+        if pd.isna(const_site) or pd.isna(url):
             continue
 
-        name = str(name).strip()
+        const_site = str(const_site).strip()
+        cam_type = str(cam_type).strip() if not pd.isna(cam_type) else ""
+        cam_location = str(cam_location).strip() if not pd.isna(cam_location) else ""
         url = str(url).strip()
         login = str(login).strip() if not pd.isna(login) else ""
         password = str(password).strip() if not pd.isna(password) else ""
         enabled = is_enabled(enabled_val)
 
-        # ⚠️ URL в таблице уже содержит авторизацию — используем как есть
-        final_url = url
-
+        # Формируем структуру камеры
         camera = {
-            "id": idx + 1,
-            "name": name,
-            "url": final_url,
-            "enabled": enabled
+            "id": int(cam_id) if not pd.isna(cam_id) else idx + 1,
+            "object": const_site,  # Для группировки
+            "name": const_site,  # Название камеры (пока как объект)
+            "type": cam_type,  # Тип камеры
+            "location": cam_location,  # Описание расположения
+            "url": url,
+            "login": login,
+            "password": password,
+            "enabled": enabled,
         }
         cameras.append(camera)
 
@@ -91,19 +105,24 @@ def main():
         else:
             stats["disabled"] += 1
 
-        # Вывод строки с индикатором
+        # Вывод строки
         status = "🟢" if enabled else "🔴"
-        print(f"{status} {idx + 1}. {name}")
+        print(f"{status} {const_site} | {cam_type} | {cam_location}")
 
     # Шифруем и сохраняем
     encrypted = cipher.encrypt(json.dumps(cameras, ensure_ascii=False).encode())
     Path(OUTPUT_ENC).write_bytes(encrypted)
 
     print("─" * 70)
-    disabled_str = f"\033[91m{stats['disabled']}\033[0m" if stats["disabled"] else str(stats["disabled"])
-    print(f"Количество камер: {stats['total']}, в сети: {stats['online']}, отключены: {disabled_str}")
+    disabled_str = (
+        f"\033[91m{stats['disabled']}\033[0m"
+        if stats["disabled"]
+        else str(stats["disabled"])
+    )
+    print(
+        f"Количество камер: {stats['total']}, в сети: {stats['online']}, отключены: {disabled_str}"
+    )
     print(f"💾 Зашифровано и сохранено: {OUTPUT_ENC}")
-    print(f"⚠️  Удалите исходный Excel-файл или убедитесь, что он не в репозитории!")
 
 
 if __name__ == "__main__":
