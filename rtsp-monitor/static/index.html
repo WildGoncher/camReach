@@ -3,325 +3,366 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <title>DOMARGO - Camera Monitor</title>
     <style>
-      /* =============================================================================
-         CSS CUSTOM PROPERTIES (DESIGN TOKENS)
-         Centralized configuration for easy theming and maintenance
-         ============================================================================= */
       :root {
-        /* ── Colors ───────────────────────────────────────────────────── */
-        --color-bg-body: #0a0a0a;
-        --color-bg-header: #111111;
-        --color-bg-card: linear-gradient(145deg, #1a1a1a, #0f0f0f);
-        --color-bg-card-hover: linear-gradient(145deg, #202020, #151515);
-        --color-bg-object: linear-gradient(90deg, #1a1a1a, #0f0f0f);
-
-        --color-text-primary: #ffffff;
-        --color-text-secondary: #e0e0e0;
-        --color-text-muted: #888888;
-        --color-text-dim: #666666;
-
-        --color-border-default: #2a2a2a;
-        --color-border-header: #333333;
-        --color-border-accent: #444444;
-
-        --color-status-online: #2ecc71;
-        --color-status-online-bg: rgba(46, 204, 113, 0.15);
-        --color-status-online-border: rgba(46, 204, 113, 0.3);
-        --color-status-online-glow: rgba(46, 204, 113, 0.5);
-
-        --color-status-offline: #e74c3c;
-        --color-status-offline-bg: rgba(231, 76, 60, 0.15);
-        --color-status-offline-border: rgba(231, 76, 60, 0.3);
-        --color-status-offline-glow: rgba(231, 76, 60, 0.5);
-
-        /* ── Typography ────────────────────────────────────────────────── */
-        --font-family-base: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        --font-weight-light: 300;
-        --font-weight-regular: 400;
-        --font-weight-medium: 500;
-
-        /* Fluid typography using clamp(min, preferred, max) */
-        --text-xs: clamp(0.7em, 2.5vw, 0.8em);
-        --text-sm: clamp(0.8em, 3vw, 0.9em);
-        --text-base: clamp(0.9em, 3.5vw, 1em);
-        --text-lg: clamp(1em, 4vw, 1.2em);
-        --text-xl: clamp(1.2em, 5vw, 1.4em);
-        --text-2xl: clamp(1.4em, 6vw, 1.8em);
-
-        /* ── Spacing ───────────────────────────────────────────────────── */
-        --space-xxs: 4px;
-        --space-xs: clamp(8px, 2vw, 10px);
-        --space-sm: clamp(10px, 2.5vw, 12px);
-        --space-md: clamp(15px, 3vw, 20px);
-        --space-lg: clamp(20px, 4vw, 25px);
-        --space-xl: clamp(25px, 5vw, 30px);
-        --space-2xl: clamp(30px, 6vw, 40px);
-
-        /* ── Layout ────────────────────────────────────────────────────── */
-        --layout-max-width: 1400px;
-        --layout-padding-x: clamp(10px, 3vw, 20px);
-        --header-height: auto;
-        --card-min-height: clamp(110px, 20vw, 140px);
-        --card-border-width: 4px;
-        --card-border-radius: 4px;
-
-        /* ── Effects ───────────────────────────────────────────────────── */
-        --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.5);
-        --shadow-card-hover: 0 6px 25px rgba(0, 0, 0, 0.7);
-        --transition-fast: 0.2s ease;
-        --transition-base: 0.3s ease;
-        --transition-slow: 0.5s ease;
+        --bg-body: #0a0a0a;
+        --bg-header: #111111;
+        --bg-card: linear-gradient(145deg, #1a1a1a, #0f0f0f);
+        --bg-object: linear-gradient(90deg, #1a1a1a, #0f0f0f);
+        --text-primary: #ffffff;
+        --text-secondary: #e0e0e0;
+        --text-muted: #888888;
+        --text-dim: #666666;
+        --border-default: #2a2a2a;
+        --border-header: #333333;
+        --border-accent: #444444;
+        --status-online: #2ecc71;
+        --status-online-bg: rgba(46, 204, 113, 0.15);
+        --status-online-border: rgba(46, 204, 113, 0.3);
+        --status-offline: #e74c3c;
+        --status-offline-bg: rgba(231, 76, 60, 0.15);
+        --status-offline-border: rgba(231, 76, 60, 0.3);
+        --font-base: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        --space-xs: 8px;
+        --space-sm: 12px;
+        --space-md: 16px;
+        --space-lg: 20px;
+        --space-xl: 24px;
+        --space-2xl: 32px;
       }
 
-      /* =============================================================================
-         BASE RESET & TYPOGRAPHY
-         ============================================================================= */
-      *,
-      *::before,
-      *::after {
+      * {
         margin: 0;
         padding: 0;
         box-sizing: border-box;
       }
-
       html {
         scroll-behavior: smooth;
       }
-
       body {
-        font-family: var(--font-family-base);
-        background-color: var(--color-bg-body);
-        color: var(--color-text-secondary);
-        line-height: 1.6;
-        font-weight: var(--font-weight-light);
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
+        font-family: var(--font-base);
+        background-color: var(--bg-body);
+        color: var(--text-secondary);
+        line-height: 1.5;
+        font-weight: 300;
       }
 
-      /* =============================================================================
-         HEADER STYLES
-         ============================================================================= */
-      header {
+      /* LOGIN */
+      .login-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.95);
+        z-index: 9999;
         display: flex;
+        justify-content: center;
         align-items: center;
-        justify-content: space-between;
+        opacity: 0;
+        visibility: hidden;
+        transition:
+          opacity 0.2s,
+          visibility 0.2s;
+      }
+      .login-overlay.active {
+        opacity: 1;
+        visibility: visible;
+      }
+      .login-card {
+        background: #1a1a1a;
+        padding: 32px;
+        border: 1px solid #333;
+        border-radius: 0;
+        width: 100%;
+        max-width: 400px;
+      }
+      .login-card h2 {
+        text-align: center;
+        margin-bottom: 24px;
+        color: #fff;
+        font-weight: 400;
+        letter-spacing: 1px;
+      }
+      .input-group {
+        margin-bottom: 16px;
+      }
+      .input-group label {
+        display: block;
+        margin-bottom: 6px;
+        color: #888;
+        font-size: 0.9em;
+      }
+      .input-group input {
+        width: 100%;
+        padding: 10px;
+        background: #0a0a0a;
+        border: 1px solid #333;
+        color: #fff;
+        border-radius: 0;
+        font-size: 1em;
+      }
+      .input-group input:focus {
+        outline: none;
+        border-color: #fff;
+      }
+      #login-btn {
+        width: 100%;
+        padding: 10px;
+        background: #222;
+        color: #fff;
+        border: 1px solid #fff;
+        border-radius: 0;
+        font-size: 1em;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      #login-btn:hover {
+        background: #333;
+      }
+      #login-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .error-msg {
+        color: #e74c3c;
+        text-align: center;
+        margin-top: 12px;
+        font-size: 0.9em;
+        min-height: 18px;
+      }
+
+      /* HEADER */
+      header {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
         gap: var(--space-md);
-        background-color: var(--color-bg-header);
+        background: var(--bg-header);
         padding: var(--space-md);
-        border-bottom: 1px solid var(--color-border-header);
-        margin-bottom: var(--space-2xl);
+        border-bottom: 1px solid var(--border-header);
         position: sticky;
         top: 0;
         z-index: 100;
       }
 
-      #header-title {
-        flex-grow: 1;
-        text-align: center;
+      .header-left {
+        display: flex;
+        justify-content: flex-start;
       }
 
-      #header-logo,
-      #current-time {
-        flex-shrink: 0;
+      .header-center {
+        display: flex;
+        justify-content: center;
+      }
+
+      .header-right {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 12px;
       }
 
       #header-logo {
-        width: clamp(4rem, 12vw, 8rem);
-        height: auto;
-        object-fit: contain;
-      }
-
-      #current-time {
-        font-size: var(--text-base);
-        color: var(--color-text-muted);
-        font-weight: var(--font-weight-light);
-        letter-spacing: 0.5px;
+        height: 40px;
+        width: auto;
       }
 
       h1 {
-        text-align: center;
-        font-weight: var(--font-weight-light);
+        font-weight: 300;
         letter-spacing: 2px;
         text-transform: uppercase;
-        font-size: var(--text-2xl);
-        color: var(--color-text-primary);
+        color: var(--text-primary);
+        font-size: 1.4em;
+        margin: 0;
       }
 
-      /* =============================================================================
-         MAIN CONTAINER & OBJECT SECTIONS
-         ============================================================================= */
+      #current-time {
+        color: var(--text-muted);
+        font-size: 0.95em;
+        letter-spacing: 0.5px;
+        white-space: nowrap;
+      }
+
+      @media (max-width: 768px) {
+        header {
+          grid-template-columns: 1fr;
+          gap: var(--space-sm);
+          text-align: center;
+        }
+
+        .header-left,
+        .header-center,
+        .header-right {
+          justify-content: center;
+        }
+
+        .header-right {
+          align-items: center;
+        }
+      }
+
+      /* STATS */
+      .global-stats {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: var(--space-lg);
+        background: var(--bg-object);
+        padding: var(--space-sm) var(--space-md);
+        border-bottom: 1px solid var(--border-header);
+      }
+      .stat-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .stat-value {
+        font-size: 1.3em;
+        font-weight: 500;
+        color: var(--text-primary);
+      }
+      .stat-label {
+        font-size: 0.75em;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+      #total-online {
+        color: var(--status-online);
+      }
+      #total-offline {
+        color: var(--status-offline);
+      }
+      .stat-divider {
+        width: 1px;
+        height: 20px;
+        background: var(--border-accent);
+      }
+
+      /* GRID & CARDS */
       .objects-container {
-        max-width: var(--layout-max-width);
+        max-width: 1400px;
         margin: 0 auto;
-        padding: 0 var(--layout-padding-x) var(--space-2xl);
+        padding: var(--space-xl) var(--space-md) var(--space-2xl);
       }
-
+      .object-section {
+        margin-top: 1rem;
+      }
       .object-header {
-        background: var(--color-bg-object);
+        background: var(--bg-object);
         padding: var(--space-sm) var(--space-lg);
-        margin: var(--space-xl) 0 var(--space-md);
-        border-left: 3px solid var(--color-border-accent);
-        border-radius: var(--card-border-radius);
+        margin-bottom: var(--space-md);
+        border-left: 3px solid var(--border-accent);
         display: flex;
         justify-content: space-between;
         align-items: center;
         flex-wrap: wrap;
         gap: var(--space-xs);
       }
-
       .object-name {
-        font-size: var(--text-xl);
-        font-weight: var(--font-weight-regular);
-        letter-spacing: 1.5px;
+        font-size: 1.1em;
+        font-weight: 400;
+        letter-spacing: 1px;
         text-transform: uppercase;
-        color: var(--color-text-primary);
-        min-width: 200px;
+        color: var(--text-primary);
       }
-
       .object-stats {
-        font-size: var(--text-sm);
-        color: var(--color-text-dim);
-        font-weight: var(--font-weight-light);
+        font-size: 0.85em;
+        color: var(--text-dim);
         display: flex;
         gap: var(--space-md);
-        flex-wrap: wrap;
       }
-
-      .object-stats span {
-        white-space: nowrap;
-      }
-
       .stat-online {
-        color: var(--color-status-online);
+        color: var(--status-online);
       }
-
       .stat-offline {
-        color: var(--color-status-offline);
+        color: var(--status-offline);
       }
 
-      /* =============================================================================
-         CAMERA GRID & CARDS
-         ============================================================================= */
       .cameras-grid {
         display: grid;
-        grid-template-columns: repeat(
-          auto-fill,
-          minmax(clamp(260px, 80vw, 300px), 1fr)
-        );
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
         gap: var(--space-md);
       }
-
       .camera-card {
-        background: var(--color-bg-card);
-        border-radius: var(--card-border-radius);
+        background: var(--bg-card);
         padding: var(--space-md);
-        border: 1px solid var(--color-border-default);
-        box-shadow: var(--shadow-card);
+        border: 1px solid var(--border-default);
         position: relative;
         overflow: hidden;
         display: flex;
         flex-direction: column;
-        justify-content: space-between;
-        min-height: var(--card-min-height);
-        transition:
-          transform var(--transition-base),
-          box-shadow var(--transition-base),
-          border-color var(--transition-base);
+        min-height: 120px;
         cursor: pointer;
+        border-radius: 0;
       }
-
       .camera-card:hover {
-        transform: translateY(-2px);
-        box-shadow: var(--shadow-card-hover);
-        border-color: var(--color-border-accent);
+        border-color: var(--border-accent);
       }
-
       .camera-card::before {
         content: "";
         position: absolute;
         top: 0;
         left: 0;
-        width: var(--card-border-width);
+        width: 4px;
         height: 100%;
-        background: var(--color-border-accent);
-        transition:
-          background var(--transition-base),
-          box-shadow var(--transition-base);
+        background: var(--border-accent);
       }
-
       .status-online::before {
-        background: var(--color-status-online);
-        box-shadow: 0 0 10px var(--color-status-online-glow);
+        background: var(--status-online);
       }
-
       .status-offline::before {
-        background: var(--color-status-offline);
-        box-shadow: 0 0 10px var(--color-status-offline-glow);
+        background: var(--status-offline);
       }
-
       .camera-name {
-        font-size: var(--text-lg);
-        font-weight: var(--font-weight-regular);
+        font-size: 1.05em;
+        font-weight: 400;
         margin-bottom: var(--space-xs);
-        letter-spacing: 1px;
-        color: var(--color-text-primary);
-        line-height: 1.3;
+        color: var(--text-primary);
       }
-
       .camera-info {
-        color: var(--color-text-muted);
-        font-size: var(--text-sm);
-        margin-bottom: var(--space-xxs);
-        font-weight: var(--font-weight-light);
-        word-break: break-word;
+        color: var(--text-muted);
+        font-size: 0.85em;
+        margin-bottom: 4px;
       }
-
       .status-indicator {
         display: inline-block;
-        padding: var(--space-xxs) var(--space-xs);
-        border-radius: 3px;
-        font-size: var(--text-xs);
+        padding: 3px 8px;
+        border-radius: 0;
+        font-size: 0.75em;
         text-transform: uppercase;
         letter-spacing: 1px;
         margin-top: auto;
-        font-weight: var(--font-weight-medium);
+        font-weight: 500;
         align-self: flex-start;
       }
-
       .status-online .status-indicator {
-        background: var(--color-status-online-bg);
-        color: var(--color-status-online);
-        border: 1px solid var(--color-status-online-border);
+        background: var(--status-online-bg);
+        color: var(--status-online);
+        border: 1px solid var(--status-online-border);
       }
-
       .status-offline .status-indicator {
-        background: var(--color-status-offline-bg);
-        color: var(--color-status-offline);
-        border: 1px solid var(--color-status-offline-border);
+        background: var(--status-offline-bg);
+        color: var(--status-offline);
+        border: 1px solid var(--status-offline-border);
       }
-
       .loading {
         text-align: center;
-        font-size: var(--text-lg);
-        color: var(--color-text-dim);
         padding: var(--space-2xl);
-        font-weight: var(--font-weight-light);
-        letter-spacing: 2px;
-        grid-column: 1 / -1;
+        color: var(--text-dim);
       }
 
-      /* =============================================================================
-         MODAL STYLES (Video Player)
-         ============================================================================= */
+      /* MODALS */
       .modal {
         position: fixed;
         top: 0;
         left: 0;
         width: 100%;
         height: 100%;
-        background-color: rgba(0, 0, 0, 0.9);
+        background: rgba(0, 0, 0, 0.9);
         z-index: 1000;
         display: flex;
         justify-content: center;
@@ -329,10 +370,9 @@
         opacity: 0;
         visibility: hidden;
         transition:
-          opacity 0.3s ease,
-          visibility 0.3s ease;
+          opacity 0.2s,
+          visibility 0.2s;
       }
-
       .modal.active {
         opacity: 1;
         visibility: visible;
@@ -341,47 +381,49 @@
       .modal-content {
         background: #111;
         border: 1px solid #333;
-        border-radius: 8px;
+        border-radius: 0;
         width: 90%;
         max-width: 1200px;
-        max-height: 90vh;
+        height: 85vh;
         display: flex;
         flex-direction: column;
         overflow: hidden;
-        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
       }
-
       .modal-header {
+        flex: 0 0 auto;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 15px 20px;
+        padding: 14px 20px;
         border-bottom: 1px solid #333;
         background: #1a1a1a;
       }
-
       .modal-header h2 {
-        font-size: 1.2em;
+        font-size: 1.1em;
         font-weight: 400;
         color: #fff;
         margin: 0;
       }
-
+      .modal-body {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 20px;
+      }
       .btn-close {
         background: transparent;
         border: none;
         color: #888;
-        font-size: 2em;
+        font-size: 1.8em;
         cursor: pointer;
         line-height: 1;
-        padding: 0 10px;
-        transition: color 0.2s;
+        padding: 0 4px;
       }
-
       .btn-close:hover {
         color: #fff;
       }
 
+      /* VIDEO PLAYER */
       .video-container {
         flex-grow: 1;
         background: #000;
@@ -389,461 +431,1042 @@
         justify-content: center;
         align-items: center;
         position: relative;
-        min-height: 400px;
+        min-height: 300px;
       }
-
       #stream-image {
         max-width: 100%;
         max-height: 80vh;
         display: none;
       }
-
       #stream-image.active {
         display: block;
       }
-
       .loading-indicator {
         color: #666;
-        font-size: 1.1em;
-        letter-spacing: 1px;
+        font-size: 1em;
         position: absolute;
       }
-
-      /* =============================================================================
-         RESPONSIVE STRUCTURAL BREAKPOINTS
-         ============================================================================= */
-
-      @media (max-width: 1024px) {
-        :root {
-          --layout-padding-x: 15px;
-        }
-        header {
-          padding: var(--space-sm);
-          gap: var(--space-sm);
-        }
-        #header-logo {
-          width: 6rem;
-        }
-        h1 {
-          font-size: var(--text-xl);
-        }
-        .object-header {
-          padding: var(--space-xs) var(--space-md);
-          margin: var(--space-lg) 0 var(--space-sm);
-        }
-        .object-name {
-          font-size: var(--text-lg);
-        }
-        .object-stats {
-          font-size: var(--text-xs);
-          gap: var(--space-sm);
-        }
-        .cameras-grid {
-          gap: var(--space-sm);
-        }
-        .camera-card {
-          padding: var(--space-sm);
-        }
+      .mode-btn {
+        background: #333;
+        color: #fff;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 0;
+        cursor: pointer;
+        font-size: 0.85em;
+        font-weight: 500;
+      }
+      .mode-btn.active {
+        background: #2ecc71 !important;
+        color: #000 !important;
       }
 
+      /* ADMIN PANEL */
+      .admin-actions {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+      .btn-action {
+        border: none;
+        padding: 10px 20px;
+        border-radius: 0;
+        cursor: pointer;
+        font-size: 0.95em;
+        font-weight: 500;
+      }
+      .btn-add {
+        background: #2ecc71;
+        color: #000;
+      }
+      .btn-reload {
+        background: #3498db;
+        color: #fff;
+      }
+      .btn-edit {
+        background: #3498db;
+        color: #fff;
+        padding: 5px 12px;
+        font-size: 0.85em;
+        margin-right: 6px;
+      }
+      .btn-toggle {
+        background: #e74c3c;
+        color: #fff;
+        padding: 5px 12px;
+        font-size: 0.85em;
+        margin-right: 6px;
+      }
+      .btn-toggle.on {
+        background: #2ecc71;
+      }
+      .btn-delete {
+        background: #e74c3c;
+        color: #fff;
+        padding: 5px 12px;
+        font-size: 0.85em;
+      }
+
+      .table-wrapper {
+        width: 100%;
+        overflow-x: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9em;
+        min-width: 800px;
+      }
+      th {
+        text-align: left;
+        padding: 12px;
+        border-bottom: 2px solid #444;
+        color: #aaa;
+        font-weight: 500;
+        white-space: nowrap;
+      }
+      td {
+        padding: 12px;
+        border-bottom: 1px solid #222;
+        color: #ddd;
+      }
+      tr:hover td {
+        background: #1a1a1a;
+      }
+
+      /* FORM */
+      .form-group {
+        margin-bottom: 14px;
+      }
+      .form-group label {
+        display: block;
+        margin-bottom: 6px;
+        color: #888;
+        font-size: 0.9em;
+      }
+      .form-group input,
+      .form-group select {
+        width: 100%;
+        padding: 9px;
+        background: #0a0a0a;
+        border: 1px solid #333;
+        color: #fff;
+        border-radius: 0;
+        font-size: 0.95em;
+      }
+      .form-group input:focus {
+        outline: none;
+        border-color: #fff;
+      }
+      .btn-submit {
+        width: 100%;
+        padding: 10px;
+        background: #2ecc71;
+        color: #000;
+        border: none;
+        border-radius: 0;
+        font-size: 0.95em;
+        font-weight: 600;
+        cursor: pointer;
+        margin-top: 10px;
+      }
+      .btn-submit:hover {
+        background: #27ae60;
+      }
+
+      /* RESPONSIVE */
       @media (max-width: 768px) {
         header {
           flex-direction: column;
-          align-items: center;
-          text-align: center;
-          padding: var(--space-sm) var(--space-xs);
-          gap: var(--space-xs);
-        }
-        #header-logo {
-          order: 1;
-        }
-        #header-title {
-          order: 2;
-          width: 100%;
-        }
-        #current-time {
-          order: 3;
+          gap: var(--space-sm);
         }
         .object-header {
           flex-direction: column;
           align-items: flex-start;
-          padding: var(--space-sm) var(--space-md);
-          margin: var(--space-md) 0 var(--space-sm);
-          gap: var(--space-xxs);
-        }
-        .object-name {
-          min-width: auto;
-        }
-        .object-stats {
-          width: 100%;
-          justify-content: flex-start;
-          gap: var(--space-xs) var(--space-sm);
-        }
-        .object-stats span {
-          margin: 0;
         }
         .cameras-grid {
           grid-template-columns: 1fr;
-          gap: var(--space-sm);
         }
-        .loading {
-          padding: var(--space-xl) var(--space-md);
-        }
-      }
-
-      @media (max-width: 480px) {
-        header {
-          padding: var(--space-xs);
-        }
-        #header-logo {
-          width: 4rem;
-        }
-        h1 {
-          font-size: var(--text-lg);
-        }
-        #current-time {
-          font-size: var(--text-xs);
-        }
-        .objects-container {
-          padding: 0 8px 20px;
-        }
-        .object-header {
-          padding: var(--space-xs) var(--space-sm);
-          margin: var(--space-sm) 0 var(--space-xs);
-        }
-        .object-name {
-          font-size: var(--text-base);
-        }
-        .object-stats {
-          font-size: var(--text-xs);
-          gap: var(--space-xxs) var(--space-sm);
-        }
-        .cameras-grid {
-          gap: var(--space-sm);
-        }
-        .camera-card {
-          padding: var(--space-sm);
-          border-radius: 3px;
-          min-height: 110px;
-        }
-        .camera-card::before {
-          width: 3px;
-        }
-        .camera-name {
-          font-size: var(--text-base);
-          margin-bottom: var(--space-xxs);
-        }
-        .camera-info {
-          font-size: var(--text-xs);
-          margin-bottom: 2px;
-        }
-        .status-indicator {
-          font-size: 0.7em;
-          padding: 2px 6px;
-          margin-top: var(--space-xs);
-        }
-      }
-
-      /* =============================================================================
-         ACCESSIBILITY & ENHANCEMENTS
-         ============================================================================= */
-      @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
-        body {
-          -webkit-font-smoothing: subpixel-antialiased;
-        }
-        .camera-card {
-          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-        }
-      }
-
-      @media (prefers-reduced-motion: reduce) {
-        *,
-        *::before,
-        *::after {
-          transition: none !important;
-          animation: none !important;
-          scroll-behavior: auto !important;
-        }
-      }
-
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --color-bg-card: linear-gradient(145deg, #151515, #0a0a0a);
-          --shadow-card: 0 2px 15px rgba(0, 0, 0, 0.6);
-        }
-      }
-
-      @media print {
-        body {
-          background: #fff;
-          color: #000;
-          font-size: 12pt;
-        }
-        header,
-        .status-indicator,
-        .modal {
-          display: none !important;
-        }
-        .camera-card {
-          break-inside: avoid;
-          border: 1px solid #000;
-          box-shadow: none;
-          background: #fff;
-        }
-        .camera-card::before {
-          display: none;
+        .modal-content {
+          width: 95%;
+          height: 90vh;
         }
       }
     </style>
   </head>
   <body>
-    <header>
-      <img
-        id="header-logo"
-        src="/static/assets/img/logo_white.png"
-        alt="DomArgo logo"
-      />
-      <h1 id="header-title">Мониторинг Камер</h1>
-      <div id="current-time"></div>
-    </header>
-
-    <div id="objects-container" class="objects-container">
-      <div class="loading">LOADING CAMERAS...</div>
+    <!-- LOGIN -->
+    <div id="login-overlay" class="login-overlay">
+      <div class="login-card">
+        <h2>Вход в систему</h2>
+        <form id="login-form">
+          <div class="input-group">
+            <label>Логин</label>
+            <input type="text" id="username" required autocomplete="username" />
+          </div>
+          <div class="input-group">
+            <label>Пароль</label>
+            <input
+              type="password"
+              id="password"
+              required
+              autocomplete="current-password"
+            />
+          </div>
+          <button type="submit" id="login-btn">Войти</button>
+          <p id="login-error" class="error-msg"></p>
+        </form>
+      </div>
     </div>
 
-    <!-- Video Modal -->
+    <!-- HEADER -->
+    <header>
+      <div class="header-left">
+        <img
+          id="header-logo"
+          src="/static/assets/img/logo_white.png"
+          alt="Logo"
+        />
+      </div>
+
+      <div class="header-center">
+        <h1 id="header-title">Мониторинг Камер</h1>
+      </div>
+
+      <div class="header-right">
+        <div id="current-time"></div>
+        <div>
+          <button
+            id="admin-panel-btn"
+            onclick="openAdminPanel()"
+            style="
+              background: #9b59b6;
+              color: #fff;
+              border: none;
+              padding: 6px 12px;
+              border-radius: 0;
+              cursor: pointer;
+              font-size: 0.9em;
+              display: none;
+            "
+          >
+            Админ-панель
+          </button>
+          <button
+            id="logout-btn"
+            style="
+              background: #e74c3c;
+              color: #fff;
+              border: none;
+              padding: 6px 12px;
+              border-radius: 0;
+              cursor: pointer;
+              font-size: 0.9em;
+            "
+          >
+            Выйти
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- STATS -->
+    <div id="global-stats" class="global-stats">
+      <div class="stat-item">
+        <span class="stat-value" id="total-online">0</span
+        ><span class="stat-label">Онлайн</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-value" id="total-offline">0</span
+        ><span class="stat-label">Офлайн</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-value" id="total-cameras">0</span
+        ><span class="stat-label">Всего</span>
+      </div>
+    </div>
+
+    <!-- GRID -->
+    <div id="objects-container" class="objects-container">
+      <div class="loading">Загрузка камер...</div>
+    </div>
+
+    <!-- VIDEO MODAL -->
     <div id="video-modal" class="modal">
       <div class="modal-content">
         <div class="modal-header">
-          <h2 id="modal-camera-name">Camera Name</h2>
-          <button id="modal-close" class="btn-close">&times;</button>
+          <h2 id="modal-camera-name">Камера</h2>
+          <div style="display: flex; gap: 8px; align-items: center">
+            <button id="mode-snapshot" class="mode-btn active">Снимки</button>
+            <button id="mode-stream" class="mode-btn">Поток</button>
+            <button id="modal-close" class="btn-close">&times;</button>
+          </div>
         </div>
         <div class="video-container">
-          <div id="video-loading" class="loading-indicator">
-            Connecting to stream...
-          </div>
+          <div id="video-loading" class="loading-indicator">Подключение...</div>
           <img id="stream-image" src="" alt="Stream" />
         </div>
       </div>
     </div>
 
-    <script>
-      const container = document.getElementById("objects-container");
-      const MONTHS_RU = [
-        "января",
-        "февраля",
-        "марта",
-        "апреля",
-        "мая",
-        "июня",
-        "июля",
-        "августа",
-        "сентября",
-        "октября",
-        "ноября",
-        "декабря",
-      ];
+    <!-- ADMIN MODAL -->
+    <div id="admin-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Управление камерами</h2>
+          <button id="admin-modal-close" class="btn-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <!-- Tabs -->
+          <div
+            style="
+              display: flex;
+              gap: 4px;
+              margin-bottom: 16px;
+              border-bottom: 1px solid #333;
+              padding-bottom: 8px;
+            "
+          >
+            <button
+              id="tab-cameras"
+              class="mode-btn active"
+              onclick="switchAdminTab('cameras')"
+              style="padding: 8px 16px"
+            >
+              Камеры
+            </button>
+            <button
+              id="tab-stats"
+              class="mode-btn"
+              onclick="switchAdminTab('stats')"
+              style="padding: 8px 16px"
+            >
+              Статистика
+            </button>
+          </div>
 
-      // =============================================================================
-      // TIME UPDATER
-      // =============================================================================
+          <!-- Cameras Tab -->
+          <div id="admin-tab-cameras">
+            <div class="admin-actions">
+              <button id="add-camera-btn" class="btn-action btn-add">
+                Добавить камеру
+              </button>
+              <button id="reload-config-btn" class="btn-action btn-reload">
+                Перезагрузить конфиг
+              </button>
+            </div>
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Название</th>
+                    <th>Объект</th>
+                    <th>Расположение</th>
+                    <th>Статус</th>
+                    <th>Действия</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-camera-list">
+                  <tr>
+                    <td
+                      colspan="6"
+                      style="text-align: center; padding: 20px; color: #666"
+                    >
+                      Загрузка...
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+                    <!-- Stats Tab -->
+          <div id="admin-tab-stats" style="display: none;">
+            <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+              <select id="stats-period" onchange="loadStatsSummary()" style="
+                background: #0a0a0a; border: 1px solid #333; color: #fff;
+                padding: 8px 12px; font-size: 0.95em;
+              ">
+                <option value="1">24 часа</option>
+                <option value="7" selected>7 дней</option>
+                <option value="30">30 дней</option>
+              </select>
+              <button onclick="exportReport()" style="
+                background: #27ae60; color: #fff; border: none;
+                padding: 8px 16px; cursor: pointer; font-size: 0.95em;
+              ">Скачать Excel</button>
+            </div>
+            <div id="stats-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 16px;">
+              <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #666;">Загрузка...</div>
+            </div>
+          </div>
+
+    <!-- FORM MODAL -->
+    <div id="camera-form-modal" class="modal">
+      <div class="modal-content" style="max-width: 600px">
+        <div class="modal-header">
+          <h2 id="camera-form-title">Добавить камеру</h2>
+          <button id="camera-form-close" class="btn-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <form id="camera-form">
+            <input type="hidden" id="cam-id" />
+            <div class="form-group">
+              <label>ID камеры *</label>
+              <input type="number" id="cam-id-input" required />
+            </div>
+            <div class="form-group">
+              <label>Название *</label>
+              <input type="text" id="cam-name" required />
+            </div>
+            <div class="form-group">
+              <label>Объект</label>
+              <input type="text" id="cam-object" />
+            </div>
+            <div class="form-group">
+              <label>Расположение</label>
+              <input type="text" id="cam-location" />
+            </div>
+            <div class="form-group">
+              <label>Тип</label>
+              <input type="text" id="cam-type" />
+            </div>
+            <div class="form-group">
+              <label>RTSP URL *</label>
+              <input
+                type="text"
+                id="cam-url"
+                required
+                placeholder="rtsp://user:pass@ip:554/stream"
+              />
+            </div>
+            <div
+              class="form-group"
+              style="display: flex; align-items: center; gap: 10px"
+            >
+              <input
+                type="checkbox"
+                id="cam-enabled"
+                checked
+                style="width: 16px; height: 16px"
+              />
+              <label style="margin: 0; cursor: pointer">Камера включена</label>
+            </div>
+            <button type="submit" class="btn-submit">Сохранить</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let currentUsername = null;
+      let currentCamId = null;
+      let currentMode = "snapshot";
+      let snapshotInterval = null;
+      let loadingTimeout = null;
+      const STREAM_TIMEOUT_MS = 15000;
+
+      const loginOverlay = document.getElementById("login-overlay");
+      const loginForm = document.getElementById("login-form");
+      const loginError = document.getElementById("login-error");
+      const globalStats = document.getElementById("global-stats");
+      const objectsContainer = document.getElementById("objects-container");
+      const logoutBtn = document.getElementById("logout-btn");
+      const adminPanelBtn = document.getElementById("admin-panel-btn");
+      const adminModal = document.getElementById("admin-modal");
+      const cameraFormModal = document.getElementById("camera-form-modal");
+      const adminCameraList = document.getElementById("admin-camera-list");
+      const modal = document.getElementById("video-modal");
+      const modalImage = document.getElementById("stream-image");
+      const modalName = document.getElementById("modal-camera-name");
+      const loadingIndicator = document.getElementById("video-loading");
+
       function updateDateTime() {
-        const timeElement = document.getElementById("current-time");
-        if (!timeElement) return;
         const now = new Date();
-        const day = now.getDate();
-        const month = MONTHS_RU[now.getMonth()];
-        const hours = String(now.getHours()).padStart(2, "0");
-        const minutes = String(now.getMinutes()).padStart(2, "0");
-        timeElement.textContent = `${day} ${month} ${hours}:${minutes}`;
+        const months = [
+          "января",
+          "февраля",
+          "марта",
+          "апреля",
+          "мая",
+          "июня",
+          "июля",
+          "августа",
+          "сентября",
+          "октября",
+          "ноября",
+          "декабря",
+        ];
+        document.getElementById("current-time").textContent =
+          `${now.getDate()} ${months[now.getMonth()]} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
       }
       updateDateTime();
       setInterval(updateDateTime, 60000);
 
-            // =============================================================================
-      // MODAL & STREAMING LOGIC
-      // =============================================================================
-      const modal = document.getElementById("video-modal");
-      const modalImage = document.getElementById("stream-image");
-      const modalName = document.getElementById("modal-camera-name");
-      const modalClose = document.getElementById("modal-close");
-      const loadingIndicator = document.getElementById("video-loading");
-      
-      let snapshotInterval = null;
-      let currentCamId = null;
-      let loadingTimeout = null;
-      const STREAM_TIMEOUT_MS = 12000; // 12 секунд
+      function showLoginScreen() {
+        loginOverlay.classList.add("active");
+        if (globalStats) globalStats.style.display = "none";
+        if (objectsContainer) objectsContainer.style.display = "none";
+        if (logoutBtn) logoutBtn.style.display = "none";
+        if (adminPanelBtn) adminPanelBtn.style.display = "none";
+      }
+      function hideLoginScreen() {
+        loginOverlay.classList.remove("active");
+        if (globalStats) globalStats.style.display = "flex";
+        if (objectsContainer) objectsContainer.style.display = "block";
+        if (logoutBtn) logoutBtn.style.display = "inline-block";
+        checkAdminAccess();
+      }
+      function checkAdminAccess() {
+        if (adminPanelBtn)
+          adminPanelBtn.style.display =
+            currentUsername === "pepethefrog" ? "inline-block" : "none";
+      }
 
-      function openCameraStream(camId, camName) {
-        // Clear previous interval and timeout
-        if (snapshotInterval) clearInterval(snapshotInterval);
-        if (loadingTimeout) clearTimeout(loadingTimeout);
-        
-        currentCamId = camId;
-        modalName.textContent = camName;
-        modal.classList.add("active");
-        
-        loadingIndicator.style.display = "block";
-        loadingIndicator.textContent = "Загрузка... (10-15 сек)";
-        loadingIndicator.style.color = "#666";
-        modalImage.classList.remove("active");
-        modalImage.src = ""; // Clear previous
-
-        // Set timeout for loading
-        loadingTimeout = setTimeout(() => {
-          if (!modalImage.classList.contains("active")) {
-            // Still not loaded after timeout
-            loadingIndicator.textContent = "Превышено время ожидания. Видео недоступно.";
-            loadingIndicator.style.color = "#e74c3c";
+      loginForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const user = document.getElementById("username").value;
+        const pass = document.getElementById("password").value;
+        const btn = document.getElementById("login-btn");
+        btn.disabled = true;
+        btn.textContent = "Проверка...";
+        loginError.textContent = "";
+        try {
+          const res = await fetch("/api/login", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Requested-With": "XMLHttpRequest",
+            },
+            body: JSON.stringify({ username: user, password: pass }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            currentUsername = data.username;
+            await loadCameras();
+            hideLoginScreen();
+            document.getElementById("username").value = "";
+            document.getElementById("password").value = "";
+          } else {
+            const err = await res.json();
+            loginError.textContent = err.detail || "Ошибка входа";
           }
-        }, STREAM_TIMEOUT_MS);
-        
-        // Load first frame immediately
-        loadSnapshot();
-        
-        // Refresh every 1.5 seconds (smooth enough for monitoring)
-        snapshotInterval = setInterval(loadSnapshot, 1500);
+        } catch (err) {
+          loginError.textContent = "Ошибка соединения";
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "Войти";
+        }
+      });
+
+      if (logoutBtn) {
+        logoutBtn.addEventListener("click", async () => {
+          try {
+            const res = await fetch("/api/logout", {
+              method: "GET",
+              headers: { "X-Requested-With": "XMLHttpRequest" },
+            });
+            if (res.ok) {
+              currentUsername = null;
+              showLoginScreen();
+              objectsContainer.innerHTML =
+                '<div class="loading">Загрузка камер...</div>';
+              document.getElementById("total-online").textContent = "0";
+              document.getElementById("total-offline").textContent = "0";
+              document.getElementById("total-cameras").textContent = "0";
+            }
+          } catch (err) {
+            console.error(err);
+          }
+        });
+      }
+
+      async function loadCameras() {
+        try {
+          const res = await fetch("/api/cameras", {
+            headers: { "X-Requested-With": "XMLHttpRequest" },
+          });
+          if (res.status === 401) {
+            showLoginScreen();
+            return;
+          }
+          if (!res.ok) throw new Error("Network error");
+          const cameras = await res.json();
+          hideLoginScreen();
+          renderGroupedCameras(cameras);
+        } catch (err) {
+          objectsContainer.innerHTML =
+            '<div class="loading" style="color:#e74c3c">Ошибка загрузки данных</div>';
+        }
+      }
+
+      function renderGroupedCameras(cameras) {
+        const total = cameras.length;
+        const online = cameras.filter((c) => c.status === "online").length;
+        document.getElementById("total-online").textContent = online;
+        document.getElementById("total-offline").textContent = total - online;
+        document.getElementById("total-cameras").textContent = total;
+
+        const grouped = cameras.reduce((acc, cam) => {
+          const obj = cam.object || "Не назначен";
+          if (!acc[obj]) acc[obj] = [];
+          acc[obj].push(cam);
+          return acc;
+        }, {});
+
+        objectsContainer.innerHTML = "";
+        Object.keys(grouped).forEach((obj) => {
+          const cams = grouped[obj];
+          const onCount = cams.filter((c) => c.status === "online").length;
+          const sec = document.createElement("div");
+          sec.className = "object-section";
+          sec.innerHTML = `
+          <div class="object-header">
+            <div class="object-name">${escapeHtml(obj)}</div>
+            <div class="object-stats">
+              <span class="stat-online">${onCount} работает</span>
+              <span class="stat-offline">${cams.length - onCount} отключено</span>
+              <span>${cams.length} всего</span>
+            </div>
+          </div>
+          <div class="cameras-grid"></div>
+        `;
+          objectsContainer.appendChild(sec);
+          const grid = sec.querySelector(".cameras-grid");
+          cams.forEach((cam) => {
+            const card = document.createElement("div");
+            card.className = `camera-card ${cam.status === "online" ? "status-online" : "status-offline"}`;
+            card.dataset.cameraId = cam.id;
+            card.innerHTML = `
+            <div class="camera-name">${escapeHtml(cam.name)}</div>
+            ${cam.location ? `<div class="camera-info">${escapeHtml(cam.location)}</div>` : ""}
+            <div class="camera-info">IP: ${escapeHtml(cam.ip)}</div>
+            <div class="status-indicator">${cam.status === "online" ? "Работает" : "Отключена"}</div>
+          `;
+            grid.appendChild(card);
+          });
+        });
+      }
+
+      function escapeHtml(str) {
+        if (!str) return "";
+        return str.replace(/[&<>]/g, (m) =>
+          m === "&" ? "&amp;" : m === "<" ? "&lt;" : "&gt;",
+        );
+      }
+
+      objectsContainer.addEventListener("click", (e) => {
+        const card = e.target.closest(".camera-card");
+        if (card)
+          openCameraStream(
+            card.dataset.cameraId,
+            card.querySelector(".camera-name").textContent,
+          );
+      });
+
+      function switchMode(mode) {
+        currentMode = mode;
+        document
+          .getElementById("mode-snapshot")
+          .classList.toggle("active", mode === "snapshot");
+        document
+          .getElementById("mode-stream")
+          .classList.toggle("active", mode === "stream");
+        if (currentCamId) {
+          if (mode === "snapshot") {
+            if (snapshotInterval) clearInterval(snapshotInterval);
+            modalImage.src = "";
+            loadSnapshot();
+            snapshotInterval = setInterval(loadSnapshot, 1500);
+          } else {
+            if (snapshotInterval) clearInterval(snapshotInterval);
+            modalImage.src = `/api/stream/${currentCamId}?t=${Date.now()}`;
+          }
+          loadingIndicator.textContent =
+            mode === "snapshot"
+              ? "Загрузка снимков..."
+              : "Подключение к потоку...";
+          loadingIndicator.style.display = "block";
+          modalImage.classList.remove("active");
+          if (loadingTimeout) clearTimeout(loadingTimeout);
+          loadingTimeout = setTimeout(() => {
+            if (!modalImage.classList.contains("active")) {
+              loadingIndicator.textContent = "Видео недоступно";
+              loadingIndicator.style.color = "#e74c3c";
+            }
+          }, STREAM_TIMEOUT_MS);
+        }
       }
 
       function loadSnapshot() {
         if (!currentCamId) return;
-        // Cache-buster forces fresh request each time
         modalImage.src = `/api/snapshot/${currentCamId}?t=${Date.now()}`;
       }
 
-      // Handle image load success
+      function openCameraStream(id, name) {
+        currentCamId = id;
+        modalName.textContent = name;
+        modal.classList.add("active");
+        loadingIndicator.style.display = "block";
+        loadingIndicator.style.color = "#666";
+        modalImage.classList.remove("active");
+        modalImage.src = "";
+        if (currentMode === "snapshot") {
+          loadSnapshot();
+          snapshotInterval = setInterval(loadSnapshot, 1500);
+        } else {
+          modalImage.src = `/api/stream/${id}?t=${Date.now()}`;
+        }
+      }
+
       modalImage.onload = () => {
         if (loadingTimeout) clearTimeout(loadingTimeout);
         loadingIndicator.style.display = "none";
         modalImage.classList.add("active");
       };
 
-      // Handle image load error
-      modalImage.onerror = () => {
-        // Don't show error immediately - wait for timeout
-        // The timeout handler will show the error message
-      };
-
-      function closeModal() {
+      function closeVideoModal() {
         modal.classList.remove("active");
-        if (snapshotInterval) {
-          clearInterval(snapshotInterval);
-          snapshotInterval = null;
-        }
-        if (loadingTimeout) {
-          clearTimeout(loadingTimeout);
-          loadingTimeout = null;
-        }
+        if (snapshotInterval) clearInterval(snapshotInterval);
+        if (loadingTimeout) clearTimeout(loadingTimeout);
         currentCamId = null;
         modalImage.src = "";
       }
 
-      modalClose.addEventListener("click", closeModal);
+      document
+        .getElementById("modal-close")
+        .addEventListener("click", closeVideoModal);
       modal.addEventListener("click", (e) => {
-        if (e.target === modal) closeModal();
+        if (e.target === modal) closeVideoModal();
       });
       document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape" && modal.classList.contains("active")) {
-          closeModal();
-        }
+        if (e.key === "Escape" && modal.classList.contains("active"))
+          closeVideoModal();
       });
-      // =============================================================================
-      // CAMERA RENDERING
-      // =============================================================================
-      function renderGroupedCameras(cameras) {
-        // 1. Group cameras by object/site
-        const grouped = cameras.reduce((acc, cam) => {
-          const objectName = cam.object || "Unassigned";
-          if (!acc[objectName]) acc[objectName] = [];
-          acc[objectName].push(cam);
-          return acc;
-        }, {});
+      document
+        .getElementById("mode-snapshot")
+        .addEventListener("click", () => switchMode("snapshot"));
+      document
+        .getElementById("mode-stream")
+        .addEventListener("click", () => switchMode("stream"));
 
-        container.innerHTML = "";
-
-        // 2. Render each group
-        Object.keys(grouped).forEach((objectName) => {
-          const objectCameras = grouped[objectName];
-          const onlineCount = objectCameras.filter(
-            (c) => c.status === "online",
-          ).length;
-          const offlineCount = objectCameras.length - onlineCount;
-
-          const objectSection = document.createElement("div");
-          objectSection.className = "object-section";
-          objectSection.innerHTML = `
-            <div class="object-header">
-                <div class="object-name">${objectName}</div>
-                <div class="object-stats">
-                    <span class="stat-online">${onlineCount} РАБОТАЕТ</span>
-                    <span class="stat-offline">${offlineCount} ОТКЛЮЧЕНО</span>
-                    <span>${objectCameras.length} ВСЕГО</span>
-                </div>
-            </div>
-            <div class="cameras-grid"></div>
-          `;
-          container.appendChild(objectSection);
-
-          const grid = objectSection.querySelector(".cameras-grid");
-
-          // 3. Render individual cards
-          objectCameras.forEach((cam) => {
-            const card = document.createElement("div");
-            const statusClass =
-              cam.status === "online" ? "status-online" : "status-offline";
-            const statusText =
-              cam.status === "online" ? "РАБОТАЕТ" : "ОТКЛЮЧЕНА";
-
-            // CRITICAL: Store ID for click handler
-            card.dataset.cameraId = cam.id;
-            card.className = `camera-card ${statusClass}`;
-
-            const locationHtml = cam.location
-              ? `<div class="camera-info" style="color: #666; margin: 8px 0;">${cam.location}</div>`
-              : "";
-
-            card.innerHTML = `
-                <div class="camera-name">${cam.name}</div>
-                ${locationHtml}
-                <div class="camera-info">IP: ${cam.ip}</div>
-                <div class="status-indicator">${statusText}</div>
-            `;
-            grid.appendChild(card);
-          });
-        });
+      async function openAdminPanel() {
+        adminModal.classList.add("active");
+        await loadAdminCameras();
       }
 
-      // =============================================================================
-      // DATA LOADING & EVENT DELEGATION
-      // =============================================================================
-      async function loadCameras() {
+      async function loadAdminCameras() {
         try {
-          const response = await fetch("/api/cameras");
-          if (!response.ok) throw new Error("Network response was not ok");
-          const cameras = await response.json();
-          renderGroupedCameras(cameras);
-        } catch (error) {
-          console.error("Error fetching cameras:", error);
-          container.innerHTML =
-            '<div class="loading" style="color:#e74c3c">ERROR LOADING DATA</div>';
+          const res = await fetch("/api/admin/cameras", {
+            headers: { "X-Requested-With": "XMLHttpRequest" },
+          });
+          if (!res.ok) {
+            adminCameraList.innerHTML =
+              '<tr><td colspan="6" style="text-align:center;padding:20px;color:#e74c3c">Ошибка доступа</td></tr>';
+            return;
+          }
+          const cameras = await res.json();
+          if (!cameras.length) {
+            adminCameraList.innerHTML =
+              '<tr><td colspan="6" style="text-align:center;padding:20px;color:#666">Нет камер</td></tr>';
+            return;
+          }
+          let html = "";
+          cameras.forEach((cam) => {
+            html += `
+            <tr>
+              <td>${cam.id}</td>
+              <td>${cam.name || "-"}</td>
+              <td>${cam.object || "-"}</td>
+              <td>${cam.location || "-"}</td>
+              <td style="color: ${cam.enabled ? "#2ecc71" : "#e74c3c"}; font-weight: 500;">${cam.enabled ? "Вкл" : "Выкл"}</td>
+              <td>
+                <button onclick="editCamera(${cam.id})" class="btn-edit">Изменить</button>
+                <button onclick="toggleCamera(${cam.id})" class="btn-toggle ${cam.enabled ? "" : "on"}">${cam.enabled ? "Выкл" : "Вкл"}</button>
+                <button onclick="deleteCamera(${cam.id})" class="btn-delete">Удалить</button>
+              </td>
+            </tr>
+          `;
+          });
+          adminCameraList.innerHTML = html;
+        } catch (err) {
+          adminCameraList.innerHTML =
+            '<tr><td colspan="6" style="text-align:center;padding:20px;color:#e74c3c">Ошибка загрузки</td></tr>';
         }
       }
 
-      // Event delegation for camera clicks (works for dynamically added elements)
-      container.addEventListener("click", (e) => {
-        const card = e.target.closest(".camera-card");
-        if (card) {
-          const camId = card.dataset.cameraId;
-          const camName = card.querySelector(".camera-name").textContent;
-          if (camId) {
-            openCameraStream(camId, camName);
-          }
+      async function editCamera(id) {
+        try {
+          const res = await fetch("/api/admin/cameras", {
+            headers: { "X-Requested-With": "XMLHttpRequest" },
+          });
+          const cameras = await res.json();
+          const cam = cameras.find((c) => c.id === id);
+          if (!cam) return;
+          document.getElementById("camera-form-title").textContent =
+            "Редактировать камеру";
+          document.getElementById("cam-id").value = cam.id;
+          document.getElementById("cam-id-input").value = cam.id;
+          document.getElementById("cam-id-input").disabled = true;
+          document.getElementById("cam-name").value = cam.name || "";
+          document.getElementById("cam-object").value = cam.object || "";
+          document.getElementById("cam-location").value = cam.location || "";
+          document.getElementById("cam-type").value = cam.type || "";
+          document.getElementById("cam-url").value = cam.url || "";
+          document.getElementById("cam-enabled").checked =
+            cam.enabled !== false;
+          cameraFormModal.classList.add("active");
+        } catch (err) {
+          alert("Ошибка загрузки данных");
         }
-      });
+      }
 
-      // Initial load
+      async function toggleCamera(id) {
+        if (!confirm("Переключить статус?")) return;
+        try {
+          const res = await fetch(`/api/admin/cameras/${id}/toggle`, {
+            method: "POST",
+            headers: { "X-Requested-With": "XMLHttpRequest" },
+          });
+          if (res.ok) await loadAdminCameras();
+          else alert("Ошибка");
+        } catch (err) {
+          alert("Ошибка");
+        }
+      }
+
+      async function deleteCamera(id) {
+        if (!confirm("Удалить камеру? Действие необратимо.")) return;
+        try {
+          const res = await fetch(`/api/admin/cameras/${id}`, {
+            method: "DELETE",
+            headers: { "X-Requested-With": "XMLHttpRequest" },
+          });
+          if (res.ok) await loadAdminCameras();
+          else alert("Ошибка");
+        } catch (err) {
+          alert("Ошибка");
+        }
+      }
+
+      document
+        .getElementById("camera-form")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const id =
+            parseInt(document.getElementById("cam-id").value) ||
+            parseInt(document.getElementById("cam-id-input").value);
+          const isEdit = document.getElementById("cam-id").value !== "";
+          const data = {
+            id,
+            name: document.getElementById("cam-name").value,
+            object: document.getElementById("cam-object").value,
+            location: document.getElementById("cam-location").value,
+            type: document.getElementById("cam-type").value,
+            url: document.getElementById("cam-url").value,
+            enabled: document.getElementById("cam-enabled").checked,
+          };
+          try {
+            const res = await fetch(
+              isEdit ? `/api/admin/cameras/${id}` : "/api/admin/cameras",
+              {
+                method: isEdit ? "PUT" : "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "X-Requested-With": "XMLHttpRequest",
+                },
+                body: JSON.stringify(data),
+              },
+            );
+            if (res.ok) {
+              cameraFormModal.classList.remove("active");
+              await loadAdminCameras();
+              alert("Сохранено");
+            } else {
+              const err = await res.json();
+              alert(`Ошибка: ${err.detail || "Неизвестно"}`);
+            }
+          } catch (err) {
+            alert("Ошибка сохранения");
+          }
+        });
+
+      document
+        .getElementById("reload-config-btn")
+        .addEventListener("click", async () => {
+          if (!confirm("Перезагрузить конфиг?")) return;
+          try {
+            const res = await fetch("/api/admin/reload", {
+              method: "POST",
+              headers: { "X-Requested-With": "XMLHttpRequest" },
+            });
+            if (res.ok) {
+              alert("Конфиг перезагружен");
+              await loadAdminCameras();
+              await loadCameras();
+            } else alert("Ошибка");
+          } catch (err) {
+            alert("Ошибка");
+          }
+        });
+
+      document
+        .getElementById("admin-modal-close")
+        .addEventListener("click", () => adminModal.classList.remove("active"));
+      document
+        .getElementById("camera-form-close")
+        .addEventListener("click", () =>
+          cameraFormModal.classList.remove("active"),
+        );
+      document
+        .getElementById("add-camera-btn")
+        .addEventListener("click", () => {
+          document.getElementById("camera-form-title").textContent =
+            "Добавить камеру";
+          document.getElementById("camera-form").reset();
+          document.getElementById("cam-id").value = "";
+          document.getElementById("cam-id-input").disabled = false;
+          cameraFormModal.classList.add("active");
+        });
+
       loadCameras();
       setInterval(loadCameras, 5000);
+
+      // =============================================================================
+      // ADMIN TABS & STATS
+      // =============================================================================
+      function switchAdminTab(tab) {
+        document
+          .getElementById("tab-cameras")
+          .classList.toggle("active", tab === "cameras");
+        document
+          .getElementById("tab-stats")
+          .classList.toggle("active", tab === "stats");
+        document.getElementById("admin-tab-cameras").style.display =
+          tab === "cameras" ? "block" : "none";
+        document.getElementById("admin-tab-stats").style.display =
+          tab === "stats" ? "block" : "none";
+
+        if (tab === "stats") loadStatsSummary();
+      }
+
+            async function loadStatsSummary() {
+        const period = document.getElementById("stats-period").value;
+        const container = document.getElementById("stats-container");
+        container.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:#666">Загрузка...</div>';
+
+        try {
+          const res = await fetch(`/api/admin/stats/summary?days=${period}`, {
+            headers: { "X-Requested-With": "XMLHttpRequest" }
+          });
+          if (!res.ok) throw new Error('Failed');
+          
+          const data = await res.json();
+          if (!data.length) {
+            container.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:#666">Нет данных</div>';
+            return;
+          }
+
+          container.innerHTML = '';
+          data.forEach(cam => {
+            const uptime = cam.uptime_percent;
+            const color = uptime >= 95 ? '#2ecc71' : uptime >= 80 ? '#f39c12' : '#e74c3c';
+            const barColor = uptime >= 95 ? 'linear-gradient(90deg, #2ecc71, #27ae60)' : 
+                            uptime >= 80 ? 'linear-gradient(90deg, #f39c12, #e67e22)' : 
+                            'linear-gradient(90deg, #e74c3c, #c0392b)';
+            
+            const card = document.createElement('div');
+            card.style.cssText = `
+              background: #1a1a1a; border: 1px solid #333; padding: 20px;
+            `;
+            
+            card.innerHTML = `
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                <strong style="font-size:1.1em;color:#fff">Камера #${cam.camera_id}</strong>
+                <span style="color:${color};font-weight:600;font-size:1.2em">${uptime}%</span>
+              </div>
+              
+              <div style="background:#222;height:32px;border-radius:0;overflow:hidden;margin-bottom:16px;position:relative">
+                <div style="
+                  width:${uptime}%;height:100%;
+                  background:${barColor};
+                  transition:width 0.6s ease;
+                "></div>
+                <div style="
+                  position:absolute;top:0;left:0;right:0;bottom:0;
+                  display:flex;align-items:center;justify-content:center;
+                  color:#fff;font-weight:600;text-shadow:0 1px 2px rgba(0,0,0,0.8);
+                ">${uptime}% онлайн</div>
+              </div>
+              
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+                <div style="background:#222;padding:12px;text-align:center">
+                  <div style="color:#2ecc71;font-size:1.3em;font-weight:600">${cam.online_seconds}ч</div>
+                  <div style="color:#666;font-size:0.85em">Онлайн</div>
+                </div>
+                <div style="background:#222;padding:12px;text-align:center">
+                  <div style="color:#e74c3c;font-size:1.3em;font-weight:600">${cam.offline_seconds}ч</div>
+                  <div style="color:#666;font-size:0.85em">Офлайн</div>
+                </div>
+              </div>
+              
+              <div style="text-align:center;color:#666;font-size:0.9em">
+                Всего смен статуса: <span style="color:#3498db;font-weight:600">${cam.total_changes}</span>
+              </div>
+            `;
+            
+            container.appendChild(card);
+          });
+        } catch (err) {
+          console.error(err);
+          container.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:#e74c3c">Ошибка</div>';
+        }
+      }
+
+      function renderUptimeChart(canvasId, uptimePercent) {
+        const ctx = document.getElementById(canvasId);
+        if (!ctx) return;
+
+        const offlinePercent = 100 - uptimePercent;
+        const color =
+          uptimePercent >= 95
+            ? "#2ecc71"
+            : uptimePercent >= 80
+              ? "#f39c12"
+              : "#e74c3c";
+
+        new Chart(ctx, {
+          type: "doughnut",
+          data: {
+            labels: ["Онлайн", "Офлайн"],
+            datasets: [
+              {
+                data: [uptimePercent, offlinePercent],
+                backgroundColor: [color, "#333"],
+                borderWidth: 0,
+                cutout: "75%",
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: { enabled: true },
+            },
+            animation: { animateScale: true, animateRotate: true },
+          },
+        });
+      }
+      function exportReport() {
+        const days = document.getElementById("stats-period").value;
+        // Direct link to download triggers browser download
+        window.location.href = `/api/admin/export/stats?days=${days}`;
+      }
     </script>
   </body>
 </html>

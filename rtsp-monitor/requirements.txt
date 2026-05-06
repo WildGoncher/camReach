@@ -1,4 +1,8 @@
 fastapi
 uvicorn
-aiohttp
-pydantic
+python-multipart
+cryptography
+itsdangerous>=2.1.2
+bcrypt>=4.1.0
+pandas
+openpyxl

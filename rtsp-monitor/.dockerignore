@@ -1,0 +1,16 @@
+venv/
+__pycache__/
+*.pyc
+*.log
+monitor.log
+results.json
+.env
+secret.key
+cameras.enc
+Dockerfile
+docker-compose.yml
+.dockerignore
+.vscode/
+.idea/
+*.swp
+*~

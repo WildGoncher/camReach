@@ -1,0 +1,17 @@
+services:
+  app:
+    build: .
+    container_name: camera-monitor
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - /app/venv
+      - /app/__pycache__
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - TZ=Europe/Moscow
+    command: uvicorn app:app --host 0.0.0.0 --port 8000 --reload --log-level info
+    restart: unless-stopped
