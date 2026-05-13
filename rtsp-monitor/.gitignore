@@ -1,23 +1,4 @@
 # =============================================================================
-# SECRETS & CONFIG (НЕ КОММИТИТЬ!)
-# =============================================================================
-secret.key
-cameras.enc
-.env
-*.pem
-*.crt
-*.key
-
-# =============================================================================
-# RUNTIME & LOGS
-# =============================================================================
-results.json
-*.log
-monitor.log
-*.sqlite
-*.db
-
-# =============================================================================
 # PYTHON
 # =============================================================================
 __pycache__/
@@ -37,95 +18,89 @@ parts/
 sdist/
 var/
 wheels/
+pip-wheel-metadata/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-
-# =============================================================================
-# VIRTUAL ENVIRONMENTS (Windows + Unix)
-# =============================================================================
-venv/
-ENV/
-env/
-.venv/
-env.bak/
-venv.bak/
+MANIFEST.in
+pyproject.toml
+setup.cfg
+.tox/
+.coverage
 .pytest_cache/
 .mypy_cache/
+ruff_cache/
+venv/
+env/
+.envrc
+.python-version
+
+# =============================================================================
+# DOCKER & CONTAINERS
+# =============================================================================
+.docker/
+docker-compose.override.yml
+*.tar.gz
+
+# =============================================================================
+# SECRETS & CONFIGS (НИКОГДА НЕ ГРУЗИ В GIT!)
+# =============================================================================
+.env
+.env.local
+.env.production
+secret.key
+cameras.enc
+*.pem
+*.crt
+*.key
+ssl/
+certbot/
+
+# =============================================================================
+# DATA & LOGS (Динамические файлы)
+# =============================================================================
+*.log
+logs/
+data/
+camera_history.db
+monitor.log
+security.log
+backup*/
+backups/
 
 # =============================================================================
 # IDE & EDITORS
 # =============================================================================
-# VS Code
 .vscode/
-*.code-workspace
-
-# PyCharm / IntelliJ
 .idea/
-*.iml
-*.ipr
-*.iws
-
-# Vim / Neovim
 *.swp
 *.swo
-*.swn
-*.un~
-*.bak
 *~
+.project
+.settings/
+.classpath
 
 # =============================================================================
-# OS & SYSTEM
+# OS SPECIFIC (WINDOWS)
 # =============================================================================
-# Windows
 Thumbs.db
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 *.lnk
-
-# macOS
 .DS_Store
-.AppleDouble
-.LSOverride
-
-# Linux
-*~
-.fuse_hidden*
-.Trash-*
-.nfs*
 
 # =============================================================================
-# TEST & COVERAGE
+# PROJECT SPECIFIC
 # =============================================================================
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache/
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
+# Скрипты для разовой генерации паролей
+hashPass.py
+generate_passwords.py
+backup.ps1
 
-# =============================================================================
-# DOCUMENTATION
-# =============================================================================
-docs/_build/
-site/
+# Папка с русским названием (лучше переименовать в docs или manual)
+Нормативная документация/
 
-# =============================================================================
-# MISCELLANEOUS
-# =============================================================================
-# FFmpeg temp files
-ffmpeg2pass*
-*.tmp
-*.temp
 
-# Node modules (if you ever add frontend build tools)
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+results.json
