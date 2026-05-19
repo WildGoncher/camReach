@@ -10,21 +10,16 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Dict, Optional
 
-
 logger = logging.getLogger(__name__)
 
-# Используем путь внутри папки data для persistence
 DB_PATH = Path("data") / "camera_history.db"
 
 
 def init_db():
     """Initialize database and create tables if not exist."""
-    # Создаем директорию data если её нет
     DB_PATH.parent.mkdir(exist_ok=True)
-
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS camera_status_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,19 +28,16 @@ def init_db():
             changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_camera_time 
         ON camera_status_history(camera_id, changed_at)
     """)
-
     conn.commit()
     conn.close()
     logger.info(f"🗄️ Database initialized at {DB_PATH}")
 
 
 def log_status_change(camera_id: int, status: str):
-    """Log a status change for a camera."""
     try:
         DB_PATH.parent.mkdir(exist_ok=True)
         conn = sqlite3.connect(DB_PATH)
@@ -61,15 +53,12 @@ def log_status_change(camera_id: int, status: str):
 
 
 def get_camera_history(camera_id: int, days: int = 7) -> List[Dict]:
-    """Get status history for a camera for the last N days."""
     try:
         if not DB_PATH.exists():
             return []
-
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-
         since = datetime.now() - timedelta(days=days)
         cursor.execute(
             """
@@ -80,7 +69,6 @@ def get_camera_history(camera_id: int, days: int = 7) -> List[Dict]:
         """,
             (camera_id, since.isoformat()),
         )
-
         results = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return results
@@ -90,9 +78,7 @@ def get_camera_history(camera_id: int, days: int = 7) -> List[Dict]:
 
 
 def get_camera_uptime(camera_id: int, days: int = 7) -> Dict:
-    """Calculate uptime percentage for a camera over N days."""
     history = get_camera_history(camera_id, days)
-
     if not history:
         return {
             "uptime_percent": 0,
@@ -101,52 +87,39 @@ def get_camera_uptime(camera_id: int, days: int = 7) -> Dict:
             "online_seconds": 0,
             "offline_seconds": 0,
         }
-
-    # Count time spent online vs offline
     total_seconds = days * 24 * 3600
     online_seconds = 0
-
     for i in range(len(history) - 1):
         curr = history[i]
         next_ = history[i + 1]
-
         curr_time = datetime.fromisoformat(curr["changed_at"])
         next_time = datetime.fromisoformat(next_["changed_at"])
         duration = (next_time - curr_time).total_seconds()
-
         if curr["status"] == "online":
             online_seconds += duration
-
-    # Handle last entry until now
     last = history[-1]
     last_time = datetime.fromisoformat(last["changed_at"])
     remaining = (datetime.now() - last_time).total_seconds()
     if last["status"] == "online":
         online_seconds += remaining
-
     uptime_percent = (
         round((online_seconds / total_seconds) * 100, 1) if total_seconds > 0 else 0
     )
-
     return {
         "uptime_percent": uptime_percent,
         "total_changes": len(history),
         "period_days": days,
-        "online_seconds": round(online_seconds / 3600, 1),  # hours
+        "online_seconds": round(online_seconds / 3600, 1),
         "offline_seconds": round((total_seconds - online_seconds) / 3600, 1),
     }
 
 
 def get_all_cameras_summary(days: int = 7) -> List[Dict]:
-    """Get uptime summary for all cameras."""
     try:
         if not DB_PATH.exists():
             return []
-
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-
-        # Get unique camera IDs with history
         since = datetime.now() - timedelta(days=days)
         cursor.execute(
             """
@@ -155,10 +128,8 @@ def get_all_cameras_summary(days: int = 7) -> List[Dict]:
         """,
             (since.isoformat(),),
         )
-
         camera_ids = [row[0] for row in cursor.fetchall()]
         conn.close()
-
         return [
             {"camera_id": cid, **get_camera_uptime(cid, days)} for cid in camera_ids
         ]
@@ -168,24 +139,15 @@ def get_all_cameras_summary(days: int = 7) -> List[Dict]:
 
 
 def generate_report_data(cameras: List[Dict], days: int = 7) -> pd.DataFrame:
-    """
-    Generates a Pandas DataFrame with uptime stats for all cameras.
-    """
     rows = []
-
     for cam in cameras:
         cid = cam.get("id")
         if not cid:
             continue
-
-        # Get stats calculated previously
         stats = get_camera_uptime(cid, days)
-
-        # Get metadata
         name = cam.get("name", f"Camera {cid}")
         obj = cam.get("object", "N/A")
         loc = cam.get("location", "N/A")
-
         rows.append(
             {
                 "ID": cid,
@@ -199,5 +161,4 @@ def generate_report_data(cameras: List[Dict], days: int = 7) -> pd.DataFrame:
                 "Период (дни)": stats["period_days"],
             }
         )
-
     return pd.DataFrame(rows)

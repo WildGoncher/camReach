@@ -783,7 +783,7 @@
             </div>
           </div>
 
-                    <!-- Stats Tab -->
+                              <!-- Stats Tab -->
           <div id="admin-tab-stats" style="display: none;">
             <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
               <select id="stats-period" onchange="loadStatsSummary()" style="
@@ -803,6 +803,10 @@
               <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #666;">Загрузка...</div>
             </div>
           </div>
+
+        </div>
+      </div>
+    </div>
 
     <!-- FORM MODAL -->
     <div id="camera-form-modal" class="modal">
@@ -1462,11 +1466,28 @@
           },
         });
       }
-      function exportReport() {
-        const days = document.getElementById("stats-period").value;
-        // Direct link to download triggers browser download
-        window.location.href = `/api/admin/export/stats?days=${days}`;
-      }
-    </script>
+      async function exportReport() {
+    const days = document.getElementById("stats-period").value;
+    try {
+        const res = await fetch(`/api/admin/export/stats?days=${days}`, {
+            headers: { "X-Requested-With": "XMLHttpRequest" }
+        });
+        if (!res.ok) {
+            alert("Ошибка при скачивании отчёта");
+            return;
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `report_${days}d.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch (err) {
+        alert("Ошибка соединения");
+    }
+}    </script>
   </body>
 </html>

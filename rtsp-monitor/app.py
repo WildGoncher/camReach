@@ -124,11 +124,11 @@ def check_rate_limit(ip: str) -> bool:
         LOGIN_ATTEMPTS[ip] = [
             t for t in LOGIN_ATTEMPTS[ip] if now - t < RATE_WINDOW_SECONDS
         ]
-    else:
-        LOGIN_ATTEMPTS[ip] = []
-    if len(LOGIN_ATTEMPTS[ip]) >= MAX_LOGIN_ATTEMPTS:
+        if not LOGIN_ATTEMPTS[ip]:
+            del LOGIN_ATTEMPTS[ip]
+    if LOGIN_ATTEMPTS.get(ip) and len(LOGIN_ATTEMPTS[ip]) >= MAX_LOGIN_ATTEMPTS:
         return False
-    LOGIN_ATTEMPTS[ip].append(now)
+    LOGIN_ATTEMPTS.setdefault(ip, []).append(now)
     return True
 
 
@@ -408,7 +408,7 @@ async def security_headers(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' blob:; connect-src 'self'"
+        "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' blob:; connect-src 'self'"
     )
     return response
 
@@ -638,10 +638,8 @@ def stream_camera(camera_id: int, request: Request):
 
 
 async def require_admin(session: dict = Depends(get_current_session)):
-    if session.get("username") != "pepethefrog":
-        raise HTTPException(
-            status_code=403, detail="Admin access required only for pepethefrog"
-        )
+    if session.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
     return session
 
 
@@ -695,6 +693,22 @@ async def admin_update_camera(
     camera_store.cameras[idx].update(data)
     await save_cameras()
     return {"status": "success"}
+
+
+@app.post("/api/admin/cameras/{camera_id}/toggle")
+async def admin_toggle_camera(camera_id: int, admin: dict = Depends(require_admin)):
+    idx = next(
+        (i for i, c in enumerate(camera_store.cameras) if c.get("id") == camera_id),
+        None,
+    )
+    if idx is None:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    current = camera_store.cameras[idx].get("enabled", True)
+    camera_store.cameras[idx]["enabled"] = not current
+    await save_cameras()
+
+    return {"status": "success", "enabled": camera_store.cameras[idx]["enabled"]}
 
 
 @app.delete("/api/admin/cameras/{camera_id}")
