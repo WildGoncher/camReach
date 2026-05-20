@@ -155,7 +155,7 @@
 
       .header-center {
         display: flex;
-        justify-content: center;
+        justify-content: center;let streamAbortController = null;
       }
 
       .header-right {
@@ -783,27 +783,65 @@
             </div>
           </div>
 
-                              <!-- Stats Tab -->
-          <div id="admin-tab-stats" style="display: none;">
-            <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
-              <select id="stats-period" onchange="loadStatsSummary()" style="
-                background: #0a0a0a; border: 1px solid #333; color: #fff;
-                padding: 8px 12px; font-size: 0.95em;
-              ">
+          <!-- Stats Tab -->
+          <div id="admin-tab-stats" style="display: none">
+            <div
+              style="
+                margin-bottom: 20px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+              "
+            >
+              <select
+                id="stats-period"
+                onchange="loadStatsSummary()"
+                style="
+                  background: #0a0a0a;
+                  border: 1px solid #333;
+                  color: #fff;
+                  padding: 8px 12px;
+                  font-size: 0.95em;
+                "
+              >
                 <option value="1">24 часа</option>
                 <option value="7" selected>7 дней</option>
                 <option value="30">30 дней</option>
               </select>
-              <button onclick="exportReport()" style="
-                background: #27ae60; color: #fff; border: none;
-                padding: 8px 16px; cursor: pointer; font-size: 0.95em;
-              ">Скачать Excel</button>
+              <button
+                onclick="exportReport()"
+                style="
+                  background: #27ae60;
+                  color: #fff;
+                  border: none;
+                  padding: 8px 16px;
+                  cursor: pointer;
+                  font-size: 0.95em;
+                "
+              >
+                Скачать Excel
+              </button>
             </div>
-            <div id="stats-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 16px;">
-              <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #666;">Загрузка...</div>
+            <div
+              id="stats-container"
+              style="
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+                gap: 16px;
+              "
+            >
+              <div
+                style="
+                  grid-column: 1/-1;
+                  text-align: center;
+                  padding: 40px;
+                  color: #666;
+                "
+              >
+                Загрузка...
+              </div>
             </div>
           </div>
-
         </div>
       </div>
     </div>
@@ -871,6 +909,7 @@
       let currentMode = "snapshot";
       let snapshotInterval = null;
       let loadingTimeout = null;
+      let streamAbortController = null;
       const STREAM_TIMEOUT_MS = 15000;
 
       const loginOverlay = document.getElementById("login-overlay");
@@ -1079,29 +1118,75 @@
         document
           .getElementById("mode-stream")
           .classList.toggle("active", mode === "stream");
-        if (currentCamId) {
-          if (mode === "snapshot") {
-            if (snapshotInterval) clearInterval(snapshotInterval);
-            modalImage.src = "";
-            loadSnapshot();
-            snapshotInterval = setInterval(loadSnapshot, 1500);
-          } else {
-            if (snapshotInterval) clearInterval(snapshotInterval);
-            modalImage.src = `/api/stream/${currentCamId}?t=${Date.now()}`;
-          }
-          loadingIndicator.textContent =
-            mode === "snapshot"
-              ? "Загрузка снимков..."
-              : "Подключение к потоку...";
-          loadingIndicator.style.display = "block";
-          modalImage.classList.remove("active");
-          if (loadingTimeout) clearTimeout(loadingTimeout);
-          loadingTimeout = setTimeout(() => {
-            if (!modalImage.classList.contains("active")) {
-              loadingIndicator.textContent = "Видео недоступно";
-              loadingIndicator.style.color = "#e74c3c";
+
+        if (streamAbortController) {
+          streamAbortController.abort();
+          streamAbortController = null;
+        }
+        if (snapshotInterval) {
+          clearInterval(snapshotInterval);
+          snapshotInterval = null;
+        }
+        modalImage.src = "";
+        modalImage.classList.remove("active");
+        loadingIndicator.style.color = "#666";
+        loadingIndicator.style.display = "block";
+        if (!currentCamId) return;
+
+        if (mode === "snapshot") {
+          loadingIndicator.textContent = "Загрузка снимка...";
+          loadSnapshot();
+        } else {
+          loadingIndicator.textContent = "Подключение к потоку...";
+          startMjpegStream(currentCamId);
+        }
+      }
+
+      async function startMjpegStream(cameraId) {
+        streamAbortController = new AbortController();
+        try {
+          const res = await fetch(`/api/stream/${cameraId}?t=${Date.now()}`, {
+            signal: streamAbortController.signal,
+            headers: { "X-Requested-With": "XMLHttpRequest" },
+          });
+          if (!res.ok) throw new Error("error");
+          const reader = res.body.getReader();
+          let buffer = new Uint8Array(0);
+          loadingIndicator.style.display = "none";
+          modalImage.classList.add("active");
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done || streamAbortController.signal.aborted) break;
+            const tmp = new Uint8Array(buffer.length + value.length);
+            tmp.set(buffer);
+            tmp.set(value, buffer.length);
+            buffer = tmp;
+            let s = -1,
+              e = -1;
+            for (let i = 0; i < buffer.length - 1; i++) {
+              if (buffer[i] === 0xff && buffer[i + 1] === 0xd8) s = i;
+              if (buffer[i] === 0xff && buffer[i + 1] === 0xd9 && s !== -1) {
+                e = i + 2;
+                break;
+              }
             }
-          }, STREAM_TIMEOUT_MS);
+            if (s !== -1 && e !== -1) {
+              const blob = new Blob([buffer.slice(s, e)], {
+                type: "image/jpeg",
+              });
+              const old = modalImage.src;
+              modalImage.src = URL.createObjectURL(blob);
+              if (old.startsWith("blob:")) URL.revokeObjectURL(old);
+              buffer = buffer.slice(e);
+            }
+          }
+        } catch (err) {
+          if (err.name !== "AbortError") {
+            loadingIndicator.textContent = "Видео недоступно";
+            loadingIndicator.style.color = "#e74c3c";
+            loadingIndicator.style.display = "block";
+            modalImage.classList.remove("active");
+          }
         }
       }
 
@@ -1114,16 +1199,17 @@
         currentCamId = id;
         modalName.textContent = name;
         modal.classList.add("active");
-        loadingIndicator.style.display = "block";
-        loadingIndicator.style.color = "#666";
-        modalImage.classList.remove("active");
-        modalImage.src = "";
-        if (currentMode === "snapshot") {
-          loadSnapshot();
-          snapshotInterval = setInterval(loadSnapshot, 1500);
-        } else {
-          modalImage.src = `/api/stream/${id}?t=${Date.now()}`;
-        }
+
+        const img = document.getElementById("stream-image");
+        const loading = document.getElementById("video-loading");
+
+        img.classList.remove("active");
+        loading.style.display = "block";
+        loading.textContent = "Загрузка снимка...";
+        loading.style.color = "#666";
+
+        // Один запрос при открытии. Больше никакого setInterval.
+        img.src = `/api/snapshot/${id}?t=${Date.now()}`;
       }
 
       modalImage.onload = () => {
@@ -1133,11 +1219,16 @@
       };
 
       function closeVideoModal() {
+        if (streamAbortController) {
+          streamAbortController.abort();
+          streamAbortController = null;
+        }
         modal.classList.remove("active");
-        if (snapshotInterval) clearInterval(snapshotInterval);
-        if (loadingTimeout) clearTimeout(loadingTimeout);
+        const img = document.getElementById("stream-image");
+        img.src = "";
+        img.classList.remove("active");
+        document.getElementById("video-loading").style.display = "none";
         currentCamId = null;
-        modalImage.src = "";
       }
 
       document
@@ -1357,36 +1448,42 @@
         if (tab === "stats") loadStatsSummary();
       }
 
-            async function loadStatsSummary() {
+      async function loadStatsSummary() {
         const period = document.getElementById("stats-period").value;
         const container = document.getElementById("stats-container");
-        container.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:#666">Загрузка...</div>';
+        container.innerHTML =
+          '<div style="grid-column:1/-1;text-align:center;padding:40px;color:#666">Загрузка...</div>';
 
         try {
           const res = await fetch(`/api/admin/stats/summary?days=${period}`, {
-            headers: { "X-Requested-With": "XMLHttpRequest" }
+            headers: { "X-Requested-With": "XMLHttpRequest" },
           });
-          if (!res.ok) throw new Error('Failed');
-          
+          if (!res.ok) throw new Error("Failed");
+
           const data = await res.json();
           if (!data.length) {
-            container.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:#666">Нет данных</div>';
+            container.innerHTML =
+              '<div style="grid-column:1/-1;text-align:center;padding:40px;color:#666">Нет данных</div>';
             return;
           }
 
-          container.innerHTML = '';
-          data.forEach(cam => {
+          container.innerHTML = "";
+          data.forEach((cam) => {
             const uptime = cam.uptime_percent;
-            const color = uptime >= 95 ? '#2ecc71' : uptime >= 80 ? '#f39c12' : '#e74c3c';
-            const barColor = uptime >= 95 ? 'linear-gradient(90deg, #2ecc71, #27ae60)' : 
-                            uptime >= 80 ? 'linear-gradient(90deg, #f39c12, #e67e22)' : 
-                            'linear-gradient(90deg, #e74c3c, #c0392b)';
-            
-            const card = document.createElement('div');
+            const color =
+              uptime >= 95 ? "#2ecc71" : uptime >= 80 ? "#f39c12" : "#e74c3c";
+            const barColor =
+              uptime >= 95
+                ? "linear-gradient(90deg, #2ecc71, #27ae60)"
+                : uptime >= 80
+                  ? "linear-gradient(90deg, #f39c12, #e67e22)"
+                  : "linear-gradient(90deg, #e74c3c, #c0392b)";
+
+            const card = document.createElement("div");
             card.style.cssText = `
               background: #1a1a1a; border: 1px solid #333; padding: 20px;
             `;
-            
+
             card.innerHTML = `
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
                 <strong style="font-size:1.1em;color:#fff">Камера #${cam.camera_id}</strong>
@@ -1421,12 +1518,13 @@
                 Всего смен статуса: <span style="color:#3498db;font-weight:600">${cam.total_changes}</span>
               </div>
             `;
-            
+
             container.appendChild(card);
           });
         } catch (err) {
           console.error(err);
-          container.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:#e74c3c">Ошибка</div>';
+          container.innerHTML =
+            '<div style="grid-column:1/-1;text-align:center;padding:40px;color:#e74c3c">Ошибка</div>';
         }
       }
 
@@ -1467,27 +1565,28 @@
         });
       }
       async function exportReport() {
-    const days = document.getElementById("stats-period").value;
-    try {
-        const res = await fetch(`/api/admin/export/stats?days=${days}`, {
-            headers: { "X-Requested-With": "XMLHttpRequest" }
-        });
-        if (!res.ok) {
+        const days = document.getElementById("stats-period").value;
+        try {
+          const res = await fetch(`/api/admin/export/stats?days=${days}`, {
+            headers: { "X-Requested-With": "XMLHttpRequest" },
+          });
+          if (!res.ok) {
             alert("Ошибка при скачивании отчёта");
             return;
+          }
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `report_${days}d.xlsx`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        } catch (err) {
+          alert("Ошибка соединения");
         }
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `report_${days}d.xlsx`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    } catch (err) {
-        alert("Ошибка соединения");
-    }
-}    </script>
+      }
+    </script>
   </body>
 </html>

@@ -21,6 +21,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
+from concurrent.futures import ThreadPoolExecutor  # ← ДОБАВЛЕНО
 
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.staticfiles import StaticFiles
@@ -230,6 +231,14 @@ class CameraStore:
 
 camera_store = CameraStore()
 
+# =============================================================================
+# SNAPSHOT CACHE & DEDUPLICATION (NEW)
+# =============================================================================
+_snapshot_cache: dict[int, tuple[bytes, float]] = {}
+_snapshot_events: dict[int, asyncio.Event] = {}
+_snapshot_lock = asyncio.Lock()
+SNAPSHOT_TTL = 5.0
+
 init_db()
 email_notifier = EmailNotifier()
 EMAIL_COOLDOWN = int(os.getenv("EMAIL_COOLDOWN_SECONDS", 300))
@@ -283,16 +292,19 @@ async def monitoring_loop():
                 active_cameras = [
                     c for c in camera_store.cameras if c.get("enabled", True)
                 ]
+
             if not active_cameras:
                 await asyncio.sleep(CHECK_INTERVAL_SECONDS)
                 continue
+
             logger.info(f"Starting status check for {len(active_cameras)} cameras...")
             start_time = datetime.now()
-            for idx, camera in enumerate(active_cameras, 1):
+
+            # Параллельная проверка всех камер
+            async def check_one(camera):
                 cam_id = camera["id"]
-                url = camera["url"]
                 is_online = await check_camera_async(
-                    url, timeout=FFPROBE_TIMEOUT_SECONDS
+                    camera["url"], timeout=FFPROBE_TIMEOUT_SECONDS
                 )
                 new_status = "online" if is_online else "offline"
                 async with camera_store._lock:
@@ -301,22 +313,16 @@ async def monitoring_loop():
                 if new_status != old_status:
                     log_status_change(cam_id, new_status)
                     logger.info(
-                        f"📝 Status change logged: Camera {cam_id} {old_status} → {new_status}"
+                        f"📝 Status change: Camera {cam_id} {old_status} → {new_status}"
                     )
-                status_symbol = "✓" if is_online else "✗"
-                logger.info(
-                    f"  [{status_symbol}] Camera {cam_id}: {new_status.upper()}"
-                )
-                if new_status != old_status:
-                    cam_obj = camera.get("object", "Неизвестный объект")
-                    cam_loc = camera.get("location", f"Камера {cam_id}")
-                    cam_type = camera.get("type", "Обзорная камера")
-                    cam_ip = camera.get("ip", "нет IP")
-                    camera_label = f"{cam_obj}, {cam_loc} {cam_type} {cam_ip}"
+                    # email уведомление
                     now = time.time()
-                    if now - last_email_time.get(cam_id, 0) < EMAIL_COOLDOWN:
-                        pass
-                    else:
+                    if now - last_email_time.get(cam_id, 0) >= EMAIL_COOLDOWN:
+                        cam_obj = camera.get("object", "Неизвестный объект")
+                        cam_loc = camera.get("location", f"Камера {cam_id}")
+                        cam_type = camera.get("type", "Обзорная камера")
+                        cam_ip = camera.get("ip", "нет IP")
+                        camera_label = f"{cam_obj}, {cam_loc} {cam_type} {cam_ip}"
                         error_detail = "Камера недоступна" if not is_online else ""
                         asyncio.create_task(
                             email_notifier.send_camera_alert(
@@ -324,15 +330,21 @@ async def monitoring_loop():
                             )
                         )
                         last_email_time[cam_id] = now
+                logger.info(
+                    f"  [{'✓' if is_online else '✗'}] Camera {cam_id}: {new_status.upper()}"
+                )
+
+            await asyncio.gather(*[check_one(cam) for cam in active_cameras])
+
             elapsed = (datetime.now() - start_time).total_seconds()
             online_count = sum(
                 1 for s in camera_store.statuses.values() if s == "online"
             )
-            total_count = len(camera_store.cameras)
             logger.info(
-                f"✅ Check complete: {online_count}/{total_count} online ({elapsed:.1f}s elapsed)"
+                f"✅ Check complete: {online_count}/{len(active_cameras)} online ({elapsed:.1f}s elapsed)"
             )
             await asyncio.sleep(CHECK_INTERVAL_SECONDS)
+
         except asyncio.CancelledError:
             break
         except Exception as e:
@@ -349,6 +361,10 @@ async def session_cleanup_loop():
         ]
         for token in expired:
             SESSIONS.pop(token, None)
+        # Очистка старого кэша скриншотов
+        for cid in list(_snapshot_cache.keys()):
+            if now - _snapshot_cache[cid][1] > SNAPSHOT_TTL * 2:
+                _snapshot_cache.pop(cid, None)
 
 
 async def run_initial_check():
@@ -369,11 +385,17 @@ async def run_initial_check():
 
 
 # =============================================================================
-# LIFESPAN
+# LIFESPAN (WITH THREAD POOL CONFIGURATION)
 # =============================================================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Application starting...")
+    # Настройка пула потоков для asyncio.to_thread()
+    # По умолчанию пул маленький, из-за чего запросы к ffmpeg встают в очередь
+    loop = asyncio.get_event_loop()
+    executor = ThreadPoolExecutor(max_workers=20)  # 20 параллельных ffmpeg-вызовов
+    loop.set_default_executor(executor)
+
+    logger.info("Application starting with ThreadPoolExecutor(max_workers=20)...")
     if camera_store.load_from_file():
         asyncio.create_task(monitoring_loop())
         asyncio.create_task(session_cleanup_loop())
@@ -381,6 +403,8 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("Camera configuration not loaded")
     yield
+    # Корректное завершение пула при выключении
+    executor.shutdown(wait=False)
     logger.info("Application shutting down...")
 
 
@@ -505,27 +529,39 @@ async def logout(
     return {"status": "logged_out"}
 
 
-def _get_snapshot_sync(rtsp_url: str, timeout: int = 8) -> bytes:
+# =============================================================================
+# SNAPSHOT FUNCTIONS (OPTIMIZED)
+# =============================================================================
+def _capture_snapshot_sync(url: str, timeout: int = 5) -> bytes | None:
+    """FFmpeg-вызов с оптимизированными флагами для быстрого захвата кадра."""
     cmd = [
         "ffmpeg",
+        "-y",
         "-loglevel",
         "error",
-        "-timeout",
-        str(timeout * 1000000),
         "-rtsp_transport",
         "tcp",
+        "-timeout",
+        str(timeout * 1_000_000),
+        "-fflags",
+        "nobuffer",
+        "-flags",
+        "low_delay",
+        "-probesize",
+        "32",
+        "-analyzeduration",
+        "0",
         "-i",
-        rtsp_url,
+        url,
         "-frames:v",
         "1",
         "-q:v",
-        "2",
+        "3",
         "-f",
         "image2pipe",
         "-vcodec",
         "mjpeg",
         "-an",
-        "-y",
         "pipe:1",
     ]
     try:
@@ -533,33 +569,79 @@ def _get_snapshot_sync(rtsp_url: str, timeout: int = 8) -> bytes:
         result = subprocess.run(
             cmd, capture_output=True, timeout=timeout + 2, creationflags=creation_flags
         )
+        # Проверяем, что вернулся валидный JPEG (начинается с FF D8)
         if (
             result.returncode == 0
             and result.stdout
             and result.stdout.startswith(b"\xff\xd8")
         ):
             return result.stdout
-        return b""
-    except Exception:
-        return b""
+    except Exception as e:
+        logger.debug(f"Snapshot capture failed for {url}: {e}")
+    return None
+
+
+async def get_snapshot_dedup(camera_id: int, url: str) -> bytes | None:
+    """TTL-кэш + дедупликация запросов к камере через asyncio.Event."""
+    now = time.time()
+
+    # 1. Проверяем кэш — если есть валидный снимок, отдаём сразу
+    if camera_id in _snapshot_cache:
+        data, ts = _snapshot_cache[camera_id]
+        if now - ts < SNAPSHOT_TTL:
+            return data
+
+    # 2. Получаем или создаём Event для этой камеры
+    async with _snapshot_lock:
+        event = _snapshot_events.setdefault(camera_id, asyncio.Event())
+
+    # 3. Если событие ещё не выполнено → мы первые, делаем запрос к камере
+    if not event.is_set():
+        try:
+            data = await asyncio.to_thread(_capture_snapshot_sync, url, 5)
+            if data:
+                _snapshot_cache[camera_id] = (data, time.time())
+            return data
+        finally:
+            # Сообщаем всем ожидающим, что результат готов
+            event.set()
+            async with _snapshot_lock:
+                _snapshot_events.pop(camera_id, None)
+    else:
+        # Мы не первые → ждём, пока первый запрос завершится
+        await asyncio.wait_for(event.wait(), timeout=15)
+        cached = _snapshot_cache.get(camera_id)
+        return cached[0] if cached else None
+
+    # Fallback на случай непредвиденного
+    return None
 
 
 @app.get("/api/snapshot/{camera_id}")
 async def get_snapshot(camera_id: int, session: dict = Depends(get_current_session)):
+    # Проверка прав доступа
     if session.get("role") == "restricted":
         cam_data = next((c for c in camera_store.cameras if c["id"] == camera_id), None)
         if cam_data and cam_data.get("object") not in session.get(
             "allowed_objects", []
         ):
             raise HTTPException(status_code=403, detail="Access denied")
+
     camera_data = next((c for c in camera_store.cameras if c["id"] == camera_id), None)
     if not camera_data or not camera_data.get("enabled", True):
         raise HTTPException(status_code=404, detail="Camera not found")
-    snapshot_data = await asyncio.to_thread(
-        _get_snapshot_sync, camera_data.get("url"), 8
-    )
+
+    # Если камера офлайн → сразу возвращаем 204, не вызывая ffmpeg
+    if camera_store.statuses.get(camera_id) == "offline":
+        return Response(
+            content=b"", status_code=204, headers={"X-Camera-Status": "offline"}
+        )
+
+    # Новая логика: кэш + дедупликация
+    snapshot_data = await get_snapshot_dedup(camera_id, camera_data.get("url"))
     if not snapshot_data:
         raise HTTPException(status_code=503, detail="Unable to get snapshot")
+
     return StreamingResponse(iter([snapshot_data]), media_type="image/jpeg")
 
 
@@ -598,8 +680,6 @@ def stream_camera(camera_id: int, request: Request):
         "10",
         "-f",
         "mpjpeg",
-        "-boundary",
-        "ffserver",
         "-an",
         "pipe:1",
     ]
@@ -633,7 +713,9 @@ def stream_camera(camera_id: int, request: Request):
                 active_streams -= 1
 
     return StreamingResponse(
-        generate(), media_type="multipart/x-mixed-replace; boundary=ffserver"
+        generate(),
+        media_type="multipart/x-mixed-replace; boundary=ffmpeg",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
