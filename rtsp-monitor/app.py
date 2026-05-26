@@ -21,7 +21,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
-from concurrent.futures import ThreadPoolExecutor  # ← ДОБАВЛЕНО
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.staticfiles import StaticFiles
@@ -37,6 +37,7 @@ from database import (
     get_camera_uptime,
     get_all_cameras_summary,
     generate_report_data,
+    aggregate_and_cleanup,
 )
 from notifier import EmailNotifier
 
@@ -352,19 +353,33 @@ async def monitoring_loop():
             await asyncio.sleep(60)
 
 
+_last_aggregation_day: int = -1
+
+
 async def session_cleanup_loop():
+    global _last_aggregation_day
     while True:
-        await asyncio.sleep(600)
+        await asyncio.sleep(600)  # каждые 10 минут
         now = time.time()
+
+        # Очистка просроченных сессий
         expired = [
             t for t, d in SESSIONS.items() if now - d["created_at"] > SESSION_EXPIRY
         ]
         for token in expired:
             SESSIONS.pop(token, None)
-        # Очистка старого кэша скриншотов
+
+        # Очистка устаревшего кэша скриншотов
         for cid in list(_snapshot_cache.keys()):
             if now - _snapshot_cache[cid][1] > SNAPSHOT_TTL * 2:
                 _snapshot_cache.pop(cid, None)
+
+        # Агрегация и очистка БД — раз в сутки
+        today = datetime.now().day
+        if today != _last_aggregation_day:
+            _last_aggregation_day = today
+            logger.info("⏳ Running daily DB aggregation...")
+            await asyncio.to_thread(aggregate_and_cleanup)
 
 
 async def run_initial_check():
@@ -827,11 +842,19 @@ async def save_cameras():
 
 @app.get("/api/admin/stats/summary")
 async def get_stats(days: int = 7, admin: dict = Depends(require_admin)):
+    if days not in (1, 7, 30, 90, 180, 365):
+        raise HTTPException(
+            status_code=400, detail="days must be 1, 7, 30, 90, 180 or 365"
+        )
     return get_all_cameras_summary(days)
 
 
 @app.get("/api/admin/export/stats")
 async def export_stats(days: int = 7, admin: dict = Depends(require_admin)):
+    if days not in (1, 7, 30, 90, 180, 365):
+        raise HTTPException(
+            status_code=400, detail="days must be 1, 7, 30, 90, 180 or 365"
+        )
     df = generate_report_data(camera_store.cameras, days)
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
